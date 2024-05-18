@@ -1,9 +1,11 @@
+use std::io::BufReader;
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 
 use midir::{Ignore, MidiInput};
 
 fn main() {
+    play_sample();
     match run() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
@@ -65,4 +67,15 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("Closing connection");
     Ok(())
+}
+
+fn play_sample() {
+    let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
+    let sink = rodio::Sink::try_new(&handle).unwrap();
+
+    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
+    let file = std::fs::File::open(path).unwrap();
+    sink.append(rodio::Decoder::new(BufReader::new(file)).unwrap());
+
+    sink.sleep_until_end();
 }

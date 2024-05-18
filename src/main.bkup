@@ -1,0 +1,76 @@
+extern crate midir;
+
+use std::io::{stdin, stdout, Write};
+use std::error::Error;
+
+use midir::{MidiInput, Ignore};
+
+
+use std::fs::File;
+use std::io::BufReader;
+use rodio::{Decoder, OutputStream, source::Source, DeviceTrait};
+use cpal::traits::HostTrait;
+
+
+// #[derive(PartialEq, Debug)]
+// pub struct Layer<R> {
+//     name: String,
+//     pitch: u8,
+//     amplitude: f64,
+//     sample: Decoder<R>
+// }
+//
+// impl Layer {
+//     pub fn play(&self, velocity: u8) {
+//         println!("I am {} note with {} velocity", self.name, velocity)
+//     }
+// }
+
+fn main() {
+    // let host = cpal::default_host();
+    // let device = host.default_output_device().expect("no output device available");
+    // println!("{:#?}", device.name());
+    // let devices = host.devices();
+    // for device in devices.into_iter() {
+    // println!("{:#?}", device.name());
+
+    // }
+    // Get a output stream handle to the default physical sound device
+    // let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    // Load a sound from a file, using a path relative to Cargo.toml
+    // let path: String = String::from("./samples2/Drone_01.mp3");
+    // let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.24005.aif");
+    // let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
+    // let file = BufReader::new(File::open(path).unwrap());
+    // Decode that sound file into a source
+    // let source = Decoder::new(file).unwrap();
+    // Play the sound directly on the device
+    // stream_handle.play_raw(source.convert_samples());
+    // let source = source.convert_samples();
+    // let _ = stream_handle.play_raw(source);
+
+    // The sound plays in a separate audio thread,
+    // so we need to keep the main thread alive while it's playing.
+    // std::thread::sleep(std::time::Duration::from_secs(5));
+    // let amplitude: f64 = 0.07593;
+    // let bounds = performer::convert::VelocityBounds {
+    //     top: 1.0,
+    //     bottom: 0.0,
+    // };
+    // let velocity = performer::convert::amplitude_to_velocity(amplitude, bounds);
+    // println!("velocity is {}", velocity);
+    //
+    // let mut que = performer::que::Que::new(7);
+    // let mut count: u8 = 0;
+    // while count < 10 {
+    //     count += 1;
+    //     que.next();
+    //     println!("and now id in que is {}", que.q_id)
+    // }
+    //
+    // let path: String = String::from("./Xy_samples/35_B2_");
+    // // let paths = fs::read_dir(path).unwrap();
+    //
+    // let note = performer::note::Note::new_from_folder(5, path);
+    //     println!("{:?}", note);
+}
