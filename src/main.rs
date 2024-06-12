@@ -5,7 +5,6 @@ use std::io::{stdin, stdout, Write};
 use midir::{Ignore, MidiInput};
 
 fn main() {
-    play_sample();
     match run() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
@@ -47,6 +46,22 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("\nOpening connection");
     let in_port_name = midi_in.port_name(in_port)?;
 
+    // playing audio section
+    // open file
+    let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
+    let sink = rodio::Sink::try_new(&handle).unwrap();
+
+    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
+    // open file
+    let file = std::fs::File::open(path).unwrap();
+    // decode
+    let file = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    // play it
+    sink.append(file);
+    // do not know what is it
+    // probably you should try to break it and see what happens
+    sink.sleep_until_end();
+
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
         in_port,
@@ -67,15 +82,4 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("Closing connection");
     Ok(())
-}
-
-fn play_sample() {
-    let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
-    let sink = rodio::Sink::try_new(&handle).unwrap();
-
-    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
-    let file = std::fs::File::open(path).unwrap();
-    sink.append(rodio::Decoder::new(BufReader::new(file)).unwrap());
-
-    sink.sleep_until_end();
 }
