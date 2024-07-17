@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports)]
 use cpal::traits::{DeviceTrait, HostTrait};
 use rodio::{dynamic_mixer, OutputStream, Sink, Source};
 use std::error::Error;
@@ -75,33 +76,30 @@ fn run() -> Result<(), Box<dyn Error>> {
         (),
     )?;
 
-    thread::spawn(move || {
-        // Construct a dynamic controller and mixer, stream_handle, and sink.
-        let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        let sink = Sink::try_new(&stream_handle).unwrap();
+    // Construct a dynamic controller and mixer, stream_handle, and sink.
+    let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
 
-        // playing audio section
-        // open file
+    // playing audio section
+    // open file
 
-        let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
-        // open file
-        let file = std::fs::File::open(path).unwrap();
-        // decode
-        let file = rodio::Decoder::new(BufReader::new(file)).unwrap();
-        // play it
-        sink.append(mixer);
-        static sound: rodio::Source = file.convert_samples::<f32>();
-        loop {
-            let note = rx.recv().unwrap();
-            println!("pitch {}, and velocity {}", note.pitch, note.velocity);
-            controller.add(&mut sound);
-            // sink.append(file);
-            // do not know what is it
-            // probably you should try to break it and see what happens
-            sink.sleep_until_end();
-        }
-    });
+    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
+    // open file
+    let file = std::fs::File::open(path).unwrap();
+    // decode
+    let file = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    // play it
+    sink.append(mixer);
+    let sound = file.convert_samples::<f32>();
+    while let Ok(note) = rx.recv() {
+        println!("pitch {}, and velocity {}", note.pitch, note.velocity);
+        controller.add(&sound);
+        // sink.append(file);
+        // do not know what is it
+        // probably you should try to break it and see what happens
+        sink.sleep_until_end();
+    }
 
     println!(
         "Connection open, reading input from '{}' (press enter to exit) ...",
