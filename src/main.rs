@@ -7,27 +7,29 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 #[derive(Clone)]
-struct MemorySound {
+struct SampleOrigin {
     samples: Vec<f32>,
     sample_rate: u32,
     current_frame: usize,
+    length: usize,
 }
 
-impl MemorySound {
+impl SampleOrigin {
     fn new(samples: Vec<f32>, sample_rate: u32) -> Self {
         Self {
-            samples,
+            samples: samples.clone(),
             sample_rate,
             current_frame: 0,
+            length: samples.len(),
         }
     }
 }
 
-impl Iterator for MemorySound {
+impl Iterator for SampleOrigin {
     type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_frame < self.samples.len() {
+        if self.current_frame < self.length {
             let sample = self.samples[self.current_frame];
             self.current_frame += 1;
             Some(sample)
@@ -37,7 +39,7 @@ impl Iterator for MemorySound {
     }
 }
 
-impl Source for MemorySound {
+impl Source for SampleOrigin {
     fn current_frame_len(&self) -> Option<usize> {
         Some(self.samples.len() - self.current_frame)
     }
@@ -131,7 +133,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
     let sample_rate = source.sample_rate();
     let samples: Vec<f32> = source.convert_samples().collect();
-    let memory_sound = MemorySound::new(samples, sample_rate);
+    let memory_sound = SampleOrigin::new(samples, sample_rate);
 
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
