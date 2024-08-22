@@ -1,13 +1,66 @@
-#![allow(dead_code, unused_imports)]
-use cpal::traits::{DeviceTrait, HostTrait};
+use midir::{Ignore, MidiInput};
 use rodio::{dynamic_mixer, OutputStream, Sink, Source};
 use std::error::Error;
 use std::io::BufReader;
 use std::io::{stdin, stdout, Write};
 use std::sync::mpsc;
-use std::thread;
+use std::time::Duration;
 
-use midir::{Ignore, MidiInput};
+#[derive(Clone)]
+struct MemorySound {
+    samples: Vec<f32>,
+    sample_rate: u32,
+    current_frame: usize,
+}
+
+impl MemorySound {
+    fn new(samples: Vec<f32>, sample_rate: u32) -> Self {
+        Self {
+            samples,
+            sample_rate,
+            current_frame: 0,
+        }
+    }
+}
+
+impl Iterator for MemorySound {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_frame < self.samples.len() {
+            let sample = self.samples[self.current_frame];
+            self.current_frame += 1;
+            Some(sample)
+        } else {
+            None
+        }
+    }
+}
+
+impl Source for MemorySound {
+    fn current_frame_len(&self) -> Option<usize> {
+        Some(self.samples.len() - self.current_frame)
+    }
+
+    fn channels(&self) -> u16 {
+        1
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        Some(Duration::from_secs_f32(
+            self.samples.len() as f32 / self.sample_rate as f32,
+        ))
+    }
+}
+
+struct MidiNote {
+    pitch: u8,
+    velocity: u8,
+}
 
 fn main() {
     match run() {
@@ -15,11 +68,6 @@ fn main() {
         Err(err) => println!("Error: {}", err),
     }
     // play_with_cpal()
-}
-
-struct MidiNote {
-    pitch: u8,
-    velocity: u8,
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
@@ -76,6 +124,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         (),
     )?;
 
+    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
+    // open file
+    let file = std::fs::File::open(path).unwrap();
+    // decode
+    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    let sample_rate = source.sample_rate();
+    let samples: Vec<f32> = source.convert_samples().collect();
+    let memory_sound = MemorySound::new(samples, sample_rate);
+
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -84,21 +141,17 @@ fn run() -> Result<(), Box<dyn Error>> {
     // playing audio section
     // open file
 
-    let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
-    // open file
-    let file = std::fs::File::open(path).unwrap();
-    // decode
-    let file = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    // let looped = rodio::decoder::LoopedDecoder::new(file);
     // play it
     sink.append(mixer);
-    let sound = file.convert_samples::<f32>();
+
     while let Ok(note) = rx.recv() {
         println!("pitch {}, and velocity {}", note.pitch, note.velocity);
-        controller.add(&sound);
-        // sink.append(file);
+        // Now you can clone and use memory_sound multiple times
+        controller.add(memory_sound.clone());
         // do not know what is it
         // probably you should try to break it and see what happens
-        sink.sleep_until_end();
+        // sink.sleep_until_end();
     }
 
     println!(
@@ -111,23 +164,4 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("Closing connection");
     Ok(())
-}
-
-fn play_with_cpal() {
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .expect("no output device available");
-    println!("device {:?}", device.name());
-    let mut supported_configs_range = device
-        .supported_output_configs()
-        .expect("err while querying config");
-    let supported_config = supported_configs_range
-        .next()
-        .expect("no supported config?!")
-        .with_max_sample_rate();
-    println!(
-        "what can I have from my output config {:?}",
-        supported_config.config()
-    )
 }
