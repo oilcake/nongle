@@ -3,6 +3,8 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct SampleTemplate {
+    /// Represents original sound stored in memory
+    /// to be cloned and used multiple times
     samples: Vec<f32>,
     sample_rate: u32,
     current_frame: usize,
@@ -34,6 +36,7 @@ impl Iterator for SampleTemplate {
     }
 }
 
+/// This one is required by rodio
 impl Source for SampleTemplate {
     fn current_frame_len(&self) -> Option<usize> {
         Some(self.samples.len() - self.current_frame)

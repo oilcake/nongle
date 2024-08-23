@@ -73,6 +73,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         (),
     )?;
 
+    // playing audio section
+    // open file
     let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
     // open file
     let file = std::fs::File::open(path).unwrap();
@@ -80,24 +82,23 @@ fn run() -> Result<(), Box<dyn Error>> {
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
     let sample_rate = source.sample_rate();
     let samples: Vec<f32> = source.convert_samples().collect();
-    let memory_sound = template::SampleTemplate::new(samples, sample_rate);
+    let template_sound = template::SampleTemplate::new(samples, sample_rate);
 
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Sink::try_new(&stream_handle).unwrap();
 
-    // playing audio section
-    // open file
-
-    // let looped = rodio::decoder::LoopedDecoder::new(file);
     // play it
     sink.append(mixer);
 
+    // note is an object of type MidiNote
+    // which represents pitch and velocity
+    // to encapsulate it in a struct
     while let Ok(note) = rx.recv() {
         println!("pitch {}, and velocity {}", note.pitch, note.velocity);
         // Now you can clone and use memory_sound multiple times
-        controller.add(memory_sound.clone());
+        controller.add(template_sound.clone());
         // do not know what is it
         // probably you should try to break it and see what happens
         // sink.sleep_until_end();
