@@ -1,64 +1,11 @@
+mod template;
+
 use midir::{Ignore, MidiInput};
 use rodio::{dynamic_mixer, OutputStream, Sink, Source};
 use std::error::Error;
 use std::io::BufReader;
 use std::io::{stdin, stdout, Write};
 use std::sync::mpsc;
-use std::time::Duration;
-
-#[derive(Clone)]
-struct SampleOrigin {
-    samples: Vec<f32>,
-    sample_rate: u32,
-    current_frame: usize,
-    length: usize,
-}
-
-impl SampleOrigin {
-    fn new(samples: Vec<f32>, sample_rate: u32) -> Self {
-        Self {
-            samples: samples.clone(),
-            sample_rate,
-            current_frame: 0,
-            length: samples.len(),
-        }
-    }
-}
-
-impl Iterator for SampleOrigin {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current_frame < self.length {
-            let sample = self.samples[self.current_frame];
-            self.current_frame += 1;
-            Some(sample)
-        } else {
-            None
-        }
-    }
-}
-
-impl Source for SampleOrigin {
-    fn current_frame_len(&self) -> Option<usize> {
-        Some(self.samples.len() - self.current_frame)
-    }
-
-    fn channels(&self) -> u16 {
-        1
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.samples.len() as f32 / self.sample_rate as f32,
-        ))
-    }
-}
-
 struct MidiNote {
     pitch: u8,
     velocity: u8,
@@ -133,7 +80,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
     let sample_rate = source.sample_rate();
     let samples: Vec<f32> = source.convert_samples().collect();
-    let memory_sound = SampleOrigin::new(samples, sample_rate);
+    let memory_sound = template::SampleTemplate::new(samples, sample_rate);
 
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
