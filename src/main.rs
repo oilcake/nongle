@@ -1,10 +1,10 @@
-mod template;
+mod sample;
 
 use midir::{Ignore, MidiInput};
 use rodio::{dynamic_mixer, OutputStream, Sink, Source};
 use std::error::Error;
 use std::io::BufReader;
-use std::io::{stdin, stdout, Write};
+use std::io::Write;
 use std::sync::mpsc;
 struct MidiNote {
     pitch: u8,
@@ -16,11 +16,9 @@ fn main() {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
     }
-    // play_with_cpal()
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let mut input = String::new();
 
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
@@ -32,8 +30,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("{}: {}", i, midi_in.port_name(p).unwrap());
     }
     let in_port = &in_ports[0];
-    println!("\nOpening connection on port {}", midi_in.port_name(in_port)?);
     let in_port_name = midi_in.port_name(in_port)?;
+    println!("\nOpening connection on port {}", in_port_name);
 
     let (tx, rx) = mpsc::channel::<MidiNote>();
 
@@ -63,7 +61,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
     let sample_rate = source.sample_rate();
     let samples: Vec<f32> = source.convert_samples().collect();
-    let template_sound = template::SampleTemplate::new(samples, sample_rate);
+    let template_sound = sample::SampleTemplate::new(samples, sample_rate);
 
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
@@ -76,24 +74,15 @@ fn run() -> Result<(), Box<dyn Error>> {
     // note is an object of type MidiNote
     // which represents pitch and velocity
     // to encapsulate it in a struct
+    // TODO: implement the way of breaking a loop
     while let Ok(note) = rx.recv() {
         print!("\rpitch {}, and velocity {}", note.pitch, note.velocity);
-        let _ = std::io::stdout().flush();
+        let _t= std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
         controller.add(template_sound.clone());
         // do not know what is it
         // probably you should try to break it and see what happens
         // sink.sleep_until_end();
     }
-
-    println!(
-        "Connection open, reading input from '{}' (press enter to exit) ...",
-        in_port_name
-    );
-
-    input.clear();
-    stdin().read_line(&mut input)?; // wait for next enter key press
-
-    println!("Closing connection");
     Ok(())
 }
