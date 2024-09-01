@@ -33,7 +33,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let in_port_name = midi_in.port_name(in_port)?;
     println!("\nOpening connection on port {}", in_port_name);
 
-    let (tx, rx) = mpsc::channel::<MidiNote>();
+    let (note_tx, note_rx) = mpsc::channel();
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
@@ -46,7 +46,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     pitch: message[1],
                     velocity: message[2],
                 };
-                tx.send(note).unwrap();
+                note_tx.send(note).unwrap();
             }
         },
         (),
@@ -75,9 +75,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     // which represents pitch and velocity
     // to encapsulate it in a struct
     // TODO: implement the way of breaking a loop
-    while let Ok(note) = rx.recv() {
+    while let Ok(note) = note_rx.recv() {
         print!("\rpitch {}, and velocity {}", note.pitch, note.velocity);
-        let _t= std::io::stdout().flush();
+        let _ = std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
         controller.add(template_sound.clone());
         // do not know what is it
