@@ -1,7 +1,8 @@
 use rodio::Source;
+use std::io::BufReader;
 use std::time::Duration;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SampleTemplate {
     /// Represents original sound stored in memory
     /// to be cloned and used multiple times
@@ -12,7 +13,13 @@ pub struct SampleTemplate {
 }
 
 impl SampleTemplate {
-    pub fn new(samples: Vec<f32>, sample_rate: u32) -> Self {
+    pub fn new(path: String) -> Self {
+        // open file
+        let file = std::fs::File::open(path).unwrap();
+        // decode
+        let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+        let sample_rate = source.sample_rate();
+        let samples: Vec<f32> = source.convert_samples().collect();
         Self {
             samples: samples.clone(),
             sample_rate,

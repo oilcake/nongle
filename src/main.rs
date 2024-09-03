@@ -1,9 +1,9 @@
 mod sample;
+// mod note;
 
 use midir::{Ignore, MidiInput};
-use rodio::{dynamic_mixer, OutputStream, Sink, Source};
+use rodio::{dynamic_mixer, OutputStream, Sink};
 use std::error::Error;
-use std::io::BufReader;
 use std::io::Write;
 use std::sync::mpsc;
 struct MidiNote {
@@ -56,13 +56,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // playing audio section
     // open file
     let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
-    // open file
-    let file = std::fs::File::open(path).unwrap();
-    // decode
-    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
-    let sample_rate = source.sample_rate();
-    let samples: Vec<f32> = source.convert_samples().collect();
-    let template_sound = sample::SampleTemplate::new(samples, sample_rate);
+    let template_sound = sample::SampleTemplate::new(path);
 
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
