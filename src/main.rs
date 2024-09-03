@@ -20,6 +20,9 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn Error>> {
 
+    // a channel to receive notes and pass them to audio engine
+    let (note_tx, note_rx) = mpsc::channel();
+
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -32,8 +35,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     let in_port = &in_ports[0];
     let in_port_name = midi_in.port_name(in_port)?;
     println!("\nOpening connection on port {}", in_port_name);
-
-    let (note_tx, note_rx) = mpsc::channel();
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
