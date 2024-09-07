@@ -6,6 +6,7 @@ use std::time::Duration;
 pub struct SampleTemplate {
     /// Represents original sound stored in memory
     /// to be cloned and used multiple times
+    pub filename: String,
     samples: Vec<f32>,
     sample_rate: u32,
     current_frame: usize,
@@ -15,12 +16,14 @@ pub struct SampleTemplate {
 impl SampleTemplate {
     pub fn new(path: String) -> Self {
         // open file
-        let file = std::fs::File::open(path).unwrap();
+        // println!("Opened {}", path);
+        let file = std::fs::File::open(&path).unwrap();
         // decode
         let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
         let sample_rate = source.sample_rate();
         let samples: Vec<f32> = source.convert_samples().collect();
         Self {
+            filename: path,
             samples: samples.clone(),
             sample_rate,
             current_frame: 0,

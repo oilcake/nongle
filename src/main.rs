@@ -1,5 +1,5 @@
 mod sample;
-// mod note;
+mod note;
 
 use midir::{Ignore, MidiInput};
 use rodio::{dynamic_mixer, OutputStream, Sink};
@@ -58,6 +58,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     let path: String = String::from("./Xy_samples/35_B2_/35_B2_0.13780.wav");
     let template_sound = sample::SampleTemplate::new(path);
 
+    // now construct note!!!!
+    let note = note::Note::new_from_folder(String::from("./Xy_samples/35_B2_"));
+    // println!("{:?}", note);
+
     // Construct a dynamic controller and mixer, stream_handle, and sink.
     let (controller, mixer) = dynamic_mixer::mixer::<f32>(2, 44_100);
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -70,11 +74,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     // which represents pitch and velocity
     // to encapsulate it in a struct
     // TODO: implement the way of breaking a loop
-    while let Ok(note) = note_rx.recv() {
-        print!("\rpitch {}, and velocity {}", note.pitch, note.velocity);
+    while let Ok(midi_note) = note_rx.recv() {
+        print!("\rpitch {}, and velocity {}", midi_note.pitch, midi_note.velocity);
         let _ = std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
-        controller.add(template_sound.clone());
+        controller.add(note.get_layer(midi_note.velocity));
         // do not know what is it
         // probably you should try to break it and see what happens
         // sink.sleep_until_end();
