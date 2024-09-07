@@ -25,7 +25,7 @@ impl Note {
                 layers.push(sample::SampleTemplate::new(name));
             }
         }
-        println!("layers len: {}", layers.len());
+        // println!("layers len: {}", layers.len());
         Note {
             depth: &layers.len() - 1,
             layers,
@@ -35,9 +35,10 @@ impl Note {
         let idx = (1.0 / 127.0) * (velocity as f64) * self.depth as f64;
         // println!("idx: {}", idx as usize);
 
-        let layer = self.layers[idx as usize].clone();
-        println!("layer: {:?}", layer.filename);
-        layer
+        // let layer = self.layers[idx as usize].clone();
+        self.layers[idx as usize].clone()
+        // println!("\nlayer: {:?}", layer.filename);
+        // layer.clone()
     }
 }
 
@@ -50,7 +51,7 @@ pub fn parse_filename(filename: &str) {
         )
             .unwrap();
     }
-    println!("Parsing {filename}");
+    // println!("Parsing {filename}");
     let props = RE.captures(filename).unwrap();
     // TODO
     // Check if match is not None AND provide clear reason of panic
