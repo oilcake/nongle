@@ -97,7 +97,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             println!("\nNo such note");
             continue;
         }
-        let note = notes.get(&midi_note.pitch);
+        let note = &notes.get(&midi_note.pitch);
         if note.is_some() {
             controller.add(note.unwrap().get_layer(midi_note.velocity));
             println!("\nyeeeei I got a NOTE");
