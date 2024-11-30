@@ -114,9 +114,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
         let note = notes.get(&midi_note.pitch);
         if note.is_some() {
-            // sink.play();
-            samples.lock().unwrap().extend(note.unwrap().get_layer(midi_note.velocity));
-            // sink.append(note.unwrap().get_layer(midi_note.velocity));
+            // Get the sample template and collect all its samples
+            let sample_template = note.unwrap().get_layer(midi_note.velocity);
+            let mut samples_lock = samples.lock().unwrap();
+            samples_lock.extend(sample_template); // This will use the Iterator implementation
             println!("\nyeeeei I got a NOTE");
         }
         // do not know what is it
@@ -147,18 +148,22 @@ fn construct_lib() -> std::collections::HashMap<u8, note::Note> {
 
 // Function to fill the output buffer with audio data
 fn play_data(output: &mut [f32], samples: Arc<Mutex<Vec<f32>>>) {
-    for sample in output.iter_mut() {
-        // Read a sample from the audio data
-        // This is a simple example; you may need to handle buffer exhaustion
-        if let Some(&sample_f32) = samples.lock().unwrap().first() {
-            // Convert 24-bit integer to f32 in range [-1.0, 1.0)
-            *sample = sample_f32;
-            // Remove the sample from the beginning for the next iteration
-            // This is not efficient; consider using an iterator
-            samples.lock().unwrap().remove(0);
-        } else {
-            *sample = 0.0; // No more samples, output silence
+    let mut samples_lock = samples.lock().unwrap();
+    
+    // If we have samples, copy them to the output buffer
+    if !samples_lock.is_empty() {
+        let samples_to_copy = std::cmp::min(output.len(), samples_lock.len());
+        output[..samples_to_copy].copy_from_slice(&samples_lock[..samples_to_copy]);
+        
+        // Remove the samples we just played
+        samples_lock.drain(..samples_to_copy);
+        
+        // Fill the rest with silence if we ran out of samples
+        if samples_to_copy < output.len() {
+            output[samples_to_copy..].fill(0.0);
         }
+    } else {
+        // No samples available, fill with silence
+        output.fill(0.0);
     }
 }
-
