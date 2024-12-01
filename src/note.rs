@@ -13,7 +13,6 @@ pub struct Note {
 
 impl Note {
     pub fn new_from_folder(path: String) -> Self {
-        // let ques = [que::Que::new(q_width); 128];
         let paths = fs::read_dir(path).unwrap();
 
         let mut layers: Vec<sample::SampleTemplate> = vec![];
@@ -21,11 +20,9 @@ impl Note {
         for path in paths {
             let name = path.unwrap().path().display().to_string();
             if name.ends_with(".wav") {
-                // parse_filename(&name);
                 layers.push(sample::SampleTemplate::new(name));
             }
         }
-        // println!("layers len: {}", layers.len());
         Note {
             depth: &layers.len() - 1,
             layers,
@@ -35,13 +32,13 @@ impl Note {
         let idx = (1.0 / 127.0) * (velocity as f64) * self.depth as f64;
         // println!("idx: {}", idx as usize);
 
-        // let layer = self.layers[idx as usize].clone();
         self.layers[idx as usize].clone()
         // println!("\nlayer: {:?}", layer.filename);
-        // layer.clone()
     }
 }
 
+// actually useless for now
+// Probably in the future may help parse filenames to attach various libraries
 pub fn parse_filename(filename: &str) {
     lazy_static! {
         // lazy static makes regex compile only with the first call
