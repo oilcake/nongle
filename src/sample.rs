@@ -30,6 +30,9 @@ impl SampleTemplate {
             length: samples.len(),
         }
     }
+    pub fn as_vec(&self) -> Vec<f32> {
+        self.samples.clone()
+    }
 }
 
 impl Iterator for SampleTemplate {

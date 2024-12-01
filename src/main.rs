@@ -115,15 +115,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         let note = notes.get(&midi_note.pitch);
         if note.is_some() {
             // Get the sample template and collect all its samples
-            let sample_template = note.unwrap().get_layer(midi_note.velocity);
+            let layer = note.unwrap().get_layer(midi_note.velocity);
             let mut samples_lock = samples.lock().unwrap();
-            samples_lock.extend(sample_template); // This will use the Iterator implementation
+            // samples_lock.extend(layer); // This will use the Iterator implementation
+            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
             println!("\nyeeeei I got a NOTE");
         }
-        // do not know what is it
-        // probably you should try to break it and see what happens
-        // sink.sleep_until_end();
-        // sink.pause();
     }
     Ok(())
 }
@@ -166,4 +163,20 @@ fn play_data(output: &mut [f32], samples: Arc<Mutex<Vec<f32>>>) {
         // No samples available, fill with silence
         output.fill(0.0);
     }
+}
+
+fn sum_vectors_with_padding<T>(vec1: &[T], vec2: &[T]) -> Vec<T>
+where
+    T: std::ops::Add<Output = T> + Default + Copy,
+{
+    let max_len = vec1.len().max(vec2.len());
+    let mut result = Vec::with_capacity(max_len);
+
+    for i in 0..max_len {
+        let val1 = vec1.get(i).copied().unwrap_or_default();
+        let val2 = vec2.get(i).copied().unwrap_or_default();
+        result.push(val1 + val2);
+    }
+
+    result
 }
