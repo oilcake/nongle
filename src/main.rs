@@ -21,6 +21,7 @@ struct MidiNote {
 
 const NOTE_ON: u8 = 0x90;
 const NOTE_OFF: u8 = 0x80;
+const QUE_WIDTH: usize = 12;
 
 fn main() {
     match run() {
@@ -31,7 +32,7 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn Error>> {
     // this is my audio data
-    let notes = construct_lib();
+    let mut notes = construct_lib();
     println!("length of notes {}", &notes.len());
 
     // a channel to receive midi notes and pass them to audio engine
@@ -56,13 +57,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         in_port,
         "midir-read-input",
         move |stamp, message, _| {
-            println!("{}: {:?} (len = {})", stamp, message, message.len());
+            // In this message it is three values which are
+            // event type, pitch and velocity
             let event = message[0];
             let pitch = message[1];
             let velocity = message[2];
             // note off velocity is just ignored for now
             // because I only have one shot type of sound
             if event == NOTE_ON {
+                println!("{}: {:?} (len = {})", stamp, message, message.len());
                 let note = MidiNote {
                     pitch,
                     velocity,
@@ -122,12 +125,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             println!("\nNo such note");
             continue;
         }
-        let note = notes.get(&midi_note.pitch);
+        let note = notes.get_mut(&midi_note.pitch);
         if note.is_some() {
-            // Get the sample template and collect all its samples
+            // add samples to buffer(my one)
             let layer = note.unwrap().get_layer(midi_note.velocity);
             let mut samples_lock = samples.lock().unwrap();
-            // samples_lock.extend(layer); // This will use the Iterator implementation
             *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
             // println!("\nyeeeei I got a NOTE");
         }
@@ -137,12 +139,12 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 fn construct_lib() -> std::collections::HashMap<u8, note::Note> {
     let mut notes: std::collections::hash_map::HashMap<u8, note::Note> = Default::default();
-    let path: String = String::from("./Xy_samples");
+    let path: String = String::from("./Xy_samples copy");
     let folders = std::fs::read_dir(path).unwrap();
     for folder in folders {
         let note_path = folder.unwrap().path().to_str().unwrap().to_string();
         // println!("{:?}", note_path);
-        let note = note::Note::new_from_folder(note_path.clone());
+        let note = note::Note::new_from_folder(note_path.clone(), QUE_WIDTH);
         let number = note_path.clone().split("/").last().unwrap().to_string()[0..2]
             .to_string()
             .parse::<u8>()

@@ -13,7 +13,7 @@ pub enum QueMode {
 #[derive(Copy, Clone, Debug)]
 pub struct Que {
     id: usize,
-    width: usize,
+    pub width: usize,
     mode : QueMode
 }
 
@@ -28,6 +28,10 @@ impl Que {
     pub fn next(&mut self) {
         self.id += 1;
         self.id = self.id % self.width;
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id
     }
 }
 

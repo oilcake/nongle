@@ -1,4 +1,4 @@
-use crate::{sample, que};
+use crate::{que, sample};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -6,13 +6,13 @@ use std::{fmt::write, fs};
 
 #[derive(Debug, Clone)]
 pub struct Note {
-    // ques: [que::Que; 128],
+    que: que::Que,
     layers: Vec<sample::SampleTemplate>,
     depth: usize,
 }
 
 impl Note {
-    pub fn new_from_folder(path: String) -> Self {
+    pub fn new_from_folder(path: String, que_width: usize) -> Self {
         let paths = fs::read_dir(path).unwrap();
 
         let mut layers: Vec<sample::SampleTemplate> = vec![];
@@ -23,17 +23,38 @@ impl Note {
                 layers.push(sample::SampleTemplate::new(name));
             }
         }
+
+        // if que width is greater than number of files
+        // we have to reduce it
+        let depth = layers.len() - 1;
+        let que = que::Que::new(
+            {
+                if que_width > depth {
+                    depth
+                } else {
+                    que_width
+                }
+            },
+            que::QueMode::Up,
+        );
         Note {
-            depth: &layers.len() - 1,
+            depth,
             layers,
+            que,
         }
     }
-    pub fn get_layer(&self, velocity: u8) -> sample::SampleTemplate {
+    pub fn get_layer(&mut self, velocity: u8) -> sample::SampleTemplate {
         // println!("\nvelocity: {velocity}");
-        let idx = (1.0 / 127.0) * (velocity as f64) * self.depth as f64;
-        // println!("\nidx: {} of {}", idx as usize, self.depth);
+        // this creepy block is the main peace of magic in this program
+        // it computes the actual index of slice of layers when it has to repeat
+        // for now it only works for up mode
+        let depth = self.depth - self.que.width;
+        let idx = (1.0 / 127.0) * (velocity as f64) * depth as f64 + self.que.get_id() as f64;
+        self.que.next();
 
-        // println!("\nlayer: {:?}", self.layers[idx as usize].filename);
+        println!("idx: {} of {}", (idx + 1.0) as usize, self.depth);
+        println!("layer: {:?}", self.layers[idx as usize].filename);
+
         self.layers[idx as usize].clone()
     }
 }
