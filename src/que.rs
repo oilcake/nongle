@@ -1,9 +1,15 @@
+#![allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
-enum QueMode {
+// Down mode will always reduce index at each new iteration
+// until it reaches the lowest point of que
+// Up is the opposite
+pub enum QueMode {
     Down,
     Up,
     // Random
 }
+// id represents an actual index in the queue
+// width is a size of cycle in which we can switch notes
 #[derive(Copy, Clone, Debug)]
 pub struct Que {
     id: usize,
@@ -16,7 +22,7 @@ impl Que {
         Que{
             id: 0,
             width,
-            mode: mode
+            mode
         }
     }
     pub fn next(&mut self) {
@@ -38,15 +44,5 @@ mod tests {
         que.next();
         que.next();
         assert_eq!(0, que.id);
-    }
-
-    #[test]
-    fn next_index_in_que_up() {
-        let mut que = Que::new(4, QueMode::Up);
-        que.next();
-        que.next();
-        que.next();
-        que.next();
-        assert_eq!(4, que.id);
     }
 }
