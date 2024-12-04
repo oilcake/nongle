@@ -6,16 +6,21 @@ use std::cell::RefCell;
 
 mod note;
 mod sample;
+mod que;
 
 use midir::{Ignore, MidiInput};
 use rodio::{dynamic_mixer, OutputStream, Sink};
 use std::error::Error;
 use std::io::Write;
 use std::sync::mpsc;
+
 struct MidiNote {
     pitch: u8,
     velocity: u8,
 }
+
+const NOTE_ON: u8 = 0x90;
+const NOTE_OFF: u8 = 0x80;
 
 fn main() {
     match run() {
@@ -50,15 +55,20 @@ fn run() -> Result<(), Box<dyn Error>> {
     let _conn_in = midi_in.connect(
         in_port,
         "midir-read-input",
-        move |_stamp, message, _| {
-            // println!("{}: {:?} (len = {})", stamp, message, message.len());
-            if message[2] != 64 && message[0] != 128 {
+        move |stamp, message, _| {
+            println!("{}: {:?} (len = {})", stamp, message, message.len());
+            let event = message[0];
+            let pitch = message[1];
+            let velocity = message[2];
+            // note off velocity is just ignored for now
+            // because I only have one shot type of sound
+            if event == NOTE_ON {
                 let note = MidiNote {
-                    pitch: message[1],
-                    velocity: message[2],
+                    pitch,
+                    velocity,
                 };
                 note_tx.send(note).unwrap();
-                println!("yeeeeei, i sent a note for ya")
+                // println!("yeeeeei, i sent a note for ya")
             }
         },
         (),
@@ -102,10 +112,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     // to encapsulate it in a struct
     // TODO: implement the way of breaking a loop
     while let Ok(midi_note) = note_rx.recv() {
-        print!(
-            "\rpitch {}, and velocity {}",
-            midi_note.pitch, midi_note.velocity
-        );
+        // print!(
+        //     "\rpitch {}, and velocity {}",
+        //     midi_note.pitch, midi_note.velocity
+        // );
         let _ = std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
         if !notes.contains_key(&midi_note.pitch) {
@@ -119,7 +129,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             let mut samples_lock = samples.lock().unwrap();
             // samples_lock.extend(layer); // This will use the Iterator implementation
             *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
-            println!("\nyeeeei I got a NOTE");
+            // println!("\nyeeeei I got a NOTE");
         }
     }
     Ok(())
