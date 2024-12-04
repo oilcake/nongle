@@ -1,4 +1,4 @@
-use crate::sample;
+use crate::{sample, que};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -29,11 +29,12 @@ impl Note {
         }
     }
     pub fn get_layer(&self, velocity: u8) -> sample::SampleTemplate {
+        // println!("\nvelocity: {velocity}");
         let idx = (1.0 / 127.0) * (velocity as f64) * self.depth as f64;
-        // println!("idx: {}", idx as usize);
+        // println!("\nidx: {} of {}", idx as usize, self.depth);
 
+        // println!("\nlayer: {:?}", self.layers[idx as usize].filename);
         self.layers[idx as usize].clone()
-        // println!("\nlayer: {:?}", layer.filename);
     }
 }
 
