@@ -1,3 +1,5 @@
 .DS_Store
 /target
 /Xy_samples
+/Xy_samples copy
+.zed/
