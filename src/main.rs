@@ -157,23 +157,26 @@ fn construct_lib() -> std::collections::HashMap<u8, note::Note> {
 
 // Function to fill the output buffer with audio data
 fn play_data(output: &mut [f32], samples: Arc<Mutex<Vec<f32>>>) {
-    let mut samples_lock = samples.lock().unwrap();
-    
-    // If we have samples, copy them to the output buffer
-    if !samples_lock.is_empty() {
-        let samples_to_copy = std::cmp::min(output.len(), samples_lock.len());
-        output[..samples_to_copy].copy_from_slice(&samples_lock[..samples_to_copy]);
-        
-        // Remove the samples we just played
-        samples_lock.drain(..samples_to_copy);
-        
-        // Fill the rest with silence if we ran out of samples
-        if samples_to_copy < output.len() {
-            output[samples_to_copy..].fill(0.0);
+    // Minimize the time we hold the lock
+    let samples_to_copy = {
+        let samples_lock = samples.lock().unwrap();
+        if samples_lock.is_empty() {
+            output.fill(0.0);
+            return;
         }
-    } else {
-        // No samples available, fill with silence
-        output.fill(0.0);
+        std::cmp::min(output.len(), samples_lock.len())
+    };
+
+    // Copy data while holding the lock for minimum time
+    {
+        let mut samples_lock = samples.lock().unwrap();
+        output[..samples_to_copy].copy_from_slice(&samples_lock[..samples_to_copy]);
+        samples_lock.drain(..samples_to_copy);
+    }
+
+    // Fill remaining buffer with silence if needed
+    if samples_to_copy < output.len() {
+        output[samples_to_copy..].fill(0.0);
     }
 }
 
@@ -183,11 +186,12 @@ where
 {
     let max_len = vec1.len().max(vec2.len());
     let mut result = Vec::with_capacity(max_len);
+    result.extend(vec1.iter().copied());
+    result.resize(max_len, T::default());
 
-    for i in 0..max_len {
-        let val1 = vec1.get(i).copied().unwrap_or_default();
-        let val2 = vec2.get(i).copied().unwrap_or_default();
-        result.push(val1 + val2);
+    // Add vec2 values in-place
+    for (i, &val2) in vec2.iter().enumerate() {
+        result[i] = result[i] + val2;
     }
 
     result
