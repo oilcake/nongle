@@ -34,11 +34,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     // midi engine
     engines::midi(note_tx);
 
-    // Audio engine
+    // Audio
+
     // Initialize the queue of audio data
-    // let mut samples: Vec<f32>;
     let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
 
+    // name is ugly, but I can't figure out better one
+    // also can't still grasp why do I have to keep two clones
     let samples_clone = Arc::clone(&samples);
 
     // setup cpal
