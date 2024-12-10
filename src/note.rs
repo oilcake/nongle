@@ -4,6 +4,11 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::{fmt::write, fs};
 
+pub struct MidiNote {
+    pub pitch: u8,
+    pub velocity: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct Note {
     que: que::Que,
