@@ -74,10 +74,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     // to encapsulate it in a struct
     // TODO: implement the way of breaking a loop
     while let Ok(midi_note) = note_rx.recv() {
-        // print!(
-        //     "\rpitch {}, and velocity {}",
-        //     midi_note.pitch, midi_note.velocity
-        // );
         let _ = std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
         if !notes.contains_key(&midi_note.pitch) {
@@ -90,7 +86,6 @@ fn run() -> Result<(), Box<dyn Error>> {
             let layer = note.unwrap().get_layer(midi_note.velocity);
             let mut samples_lock = samples.lock().unwrap();
             *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
-            // println!("\nyeeeei I got a NOTE");
         }
     }
     Ok(())
