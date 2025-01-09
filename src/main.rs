@@ -23,16 +23,31 @@ const NOTE_ON: u8 = 0x90;
 const NOTE_OFF: u8 = 0x80;
 const QUE_WIDTH: usize = 12;
 
-fn main() {
-    match run() {
-        Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
-    }
+use clap::Parser;
+
+/// Command line arguments
+#[derive(Parser, Debug)]
+#[clap(name = "nongle", version = "1.0", author = "oilcake")]
+struct Cli {
+    /// Sample library
+    #[clap(short, long, value_parser)]
+    library: String,
+
+    /// Polyphony
+    #[clap(short, long, value_parser)]
+    voices: u8,
+
+    /// Que width
+    #[clap(short, long, action)]
+    win_size: u8,
 }
 
-fn run() -> Result<(), Box<dyn Error>> {
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Cli::parse();
     // this is my audio data
-    let mut notes = construct_lib();
+    let mut notes = construct_lib(args.library, args.win_size);
+    println!("gonna run with {}", &args.voices);
     println!("length of notes {}", &notes.len());
 
     // a channel to receive midi notes and pass them to audio engine
@@ -134,14 +149,13 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn construct_lib() -> std::collections::HashMap<u8, note::Note> {
+fn construct_lib(path: String, que_width: u8) -> std::collections::HashMap<u8, note::Note> {
     let mut notes: std::collections::hash_map::HashMap<u8, note::Note> = Default::default();
-    let path: String = String::from("./Xy_samples copy");
     let folders = std::fs::read_dir(path).unwrap();
     for folder in folders {
         let note_path = folder.unwrap().path().to_str().unwrap().to_string();
         // println!("{:?}", note_path);
-        let note = note::Note::new_from_folder(note_path.clone(), QUE_WIDTH);
+        let note = note::Note::new_from_folder(note_path.clone(), que_width.into());
         let number = note_path.clone().split("/").last().unwrap().to_string()[0..2]
             .to_string()
             .parse::<u8>()

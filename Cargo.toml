@@ -11,3 +11,4 @@ lazy_static = "1.4.0"
 rodio = "0.18.0"
 cpal = "0.15.2"
 midir = "0.10.0"
+clap = { version = "4.0", features = ["derive"] }
