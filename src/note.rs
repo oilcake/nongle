@@ -13,12 +13,14 @@ pub struct Note {
 
 impl Note {
     pub fn new_from_folder(path: String, que_width: usize) -> Self {
-        let paths = fs::read_dir(path).unwrap();
+        let mut paths: Vec<_> = fs::read_dir(path).unwrap().map(|f| f.unwrap()).collect();
+        paths.sort_by_key(|f| f.path());
 
         let mut layers: Vec<sample::SampleTemplate> = vec![];
 
         for path in paths {
-            let name = path.unwrap().path().display().to_string();
+            let name = path.path().display().to_string();
+            println!("{:?}", name);
             if name.ends_with(".wav") {
                 layers.push(sample::SampleTemplate::new(name));
             }
