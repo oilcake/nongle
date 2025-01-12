@@ -3,3 +3,4 @@
 /Xy_samples_*
 .zed/
 .vscode/
+justfile
