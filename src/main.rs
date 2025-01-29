@@ -95,11 +95,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Audio
 
     // Initialize the queue of audio data
-    let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
-
-    // name is ugly, but I can't figure out better one
-    // also can't still grasp why do I have to keep two clones
-    let samples_clone = Arc::clone(&samples);
+    let buffer_input = Arc::new(Mutex::new(Vec::<f32>::new()));
+    // It's called input because it is getting filled
+    // when note is received
+    let buffer_output = Arc::clone(&buffer_input);
+    // this one called output because it is what cpal
+    // has to fill its buffer. Of course they are the same buffer
 
     // setup cpal
     let host = cpal::default_host();
@@ -119,7 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stream = device.build_output_stream(
         &config,
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            play_data(data, samples_clone.clone());
+            play_data(data, buffer_output.clone());
         },
         move |err| eprintln!("an error occurred on stream: {err}"),
         None,
@@ -142,7 +143,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if note.is_some() {
             // add samples to buffer(my one)
             let layer = note.unwrap().get_layer(midi_note.velocity);
-            let mut samples_lock = samples.lock().unwrap();
+            let mut samples_lock = buffer_input.lock().unwrap();
             *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
         }
     }
