@@ -46,7 +46,6 @@ impl Note {
         }
     }
     pub fn get_layer(&mut self, velocity: u8) -> sample::SampleTemplate {
-        // println!("\nvelocity: {velocity}");
         // this creepy block is the main peace of magic in this program
         // it computes the actual index of slice of layers when it has to repeat
         // for now it only works for up mode
