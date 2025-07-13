@@ -1,0 +1,17 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2021"
+authors = ["oilcake tv <oilpie@gmail.com>"]
+license = "GPL-3.0-or-later"
+description = "Audio engine for nongle sampler"
+
+[features]
+default = []
+shared = []
+
+[lib]
+name = "engine"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
