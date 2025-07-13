@@ -1,6 +1,0 @@
-.DS_Store
-/target
-/Xy_samples_*
-.zed/
-.vscode/
-justfile
