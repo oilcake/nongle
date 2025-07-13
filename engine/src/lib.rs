@@ -1,14 +1,21 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod note;
+pub mod que;
+pub mod sample;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+pub fn construct_lib(path: String, que_width: u8) -> std::collections::HashMap<u8, note::Note> {
+    let mut notes: std::collections::hash_map::HashMap<u8, note::Note> = Default::default();
+    let folders = std::fs::read_dir(path).unwrap();
+    for folder in folders {
+        let note_path = folder.unwrap().path().to_str().unwrap().to_string();
+        // println!("{:?}", note_path);
+        let note = note::Note::new_from_folder(note_path.clone(), que_width.into());
+        let number = note_path.clone().split("/").last().unwrap().to_string()[0..2]
+            .to_string()
+            .parse::<u8>()
+            .unwrap();
+        // println!("{:?}", &number);
+        notes.insert(number, note);
     }
+    notes
 }
+

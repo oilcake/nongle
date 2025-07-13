@@ -2,7 +2,7 @@ use crate::{que, sample};
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::{fmt::write, fs};
+use std::fs;
 
 #[derive(Debug, Clone)]
 pub struct Note {

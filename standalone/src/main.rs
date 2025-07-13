@@ -1,15 +1,15 @@
 #![allow(unused_imports)]
+use engine::construct_lib;
 use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-mod note;
-mod sample;
-mod que;
+use engine::note;
+use engine::que;
+use engine::sample;
 
 use midir::{Ignore, MidiInput};
-use rodio::{dynamic_mixer, OutputStream, Sink};
 use std::error::Error;
 use std::io::Write;
 use std::sync::mpsc;
@@ -20,8 +20,6 @@ struct MidiNote {
 }
 
 const NOTE_ON: u8 = 0x90;
-const NOTE_OFF: u8 = 0x80;
-const QUE_WIDTH: usize = 12;
 
 use clap::Parser;
 
@@ -148,23 +146,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
-}
-
-fn construct_lib(path: String, que_width: u8) -> std::collections::HashMap<u8, note::Note> {
-    let mut notes: std::collections::hash_map::HashMap<u8, note::Note> = Default::default();
-    let folders = std::fs::read_dir(path).unwrap();
-    for folder in folders {
-        let note_path = folder.unwrap().path().to_str().unwrap().to_string();
-        // println!("{:?}", note_path);
-        let note = note::Note::new_from_folder(note_path.clone(), que_width.into());
-        let number = note_path.clone().split("/").last().unwrap().to_string()[0..2]
-            .to_string()
-            .parse::<u8>()
-            .unwrap();
-        // println!("{:?}", &number);
-        notes.insert(number, note);
-    }
-    notes
 }
 
 // Function to fill the output buffer with audio data
