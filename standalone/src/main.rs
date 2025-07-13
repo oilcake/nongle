@@ -42,11 +42,12 @@ struct Cli {
 
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
     let args = Cli::parse();
     // this is my audio data
     let mut notes = construct_lib(args.library, args.win_size);
-    println!("gonna run with {}", &args.voices);
-    println!("length of notes {}", &notes.len());
+    log::debug!("gonna run with {}", &args.voices);
+    log::debug!("length of notes {}", &notes.len());
 
     // a channel to receive midi notes and pass them to audio engine
     let (note_tx, note_rx) = mpsc::channel();
@@ -57,13 +58,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Get an input port (read from console if multiple are available)
     let in_ports = midi_in.ports();
-    println!("Available input ports:");
+    log::debug!("Available input ports:");
     for (i, p) in in_ports.iter().enumerate() {
-        println!("{}: {}", i, midi_in.port_name(p).unwrap());
+        log::debug!("{}: {}", i, midi_in.port_name(p).unwrap());
     }
     let in_port = &in_ports[0];
     let in_port_name = midi_in.port_name(in_port)?;
-    println!("\nOpening connection on port {}", in_port_name);
+    log::debug!("\nOpening connection on port {}", in_port_name);
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
@@ -78,13 +79,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             // note off velocity is just ignored for now
             // because I only have one shot type of sound
             if event == NOTE_ON {
-                println!("{}: {:?} (len = {})", stamp, message, message.len());
+                log::debug!("{}: {:?} (len = {})", stamp, message, message.len());
                 let note = MidiNote {
                     pitch,
                     velocity,
                 };
                 note_tx.send(note).unwrap();
-                // println!("yeeeeei, i sent a note for ya")
             }
         },
         (),
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     
     let device_name = device.name().unwrap();
-    println!("Using device: {device_name} with config: {config:?}");
+    log::debug!("Using device: {device_name} with config: {config:?}");
 
     // Create a cpal stream
     let stream = device.build_output_stream(
@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
             play_data(data, buffer_output.clone());
         },
-        move |err| eprintln!("an error occurred on stream: {err}"),
+        move |err| log::error!("an error occurred on stream: {err}"),
         None,
     ).unwrap();
 
@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let _ = std::io::stdout().flush();
         // Now you can clone and use memory_sound multiple times
         if !notes.contains_key(&midi_note.pitch) {
-            println!("\nNo such note");
+            log::debug!("\nNo such note");
             continue;
         }
         let note = notes.get_mut(&midi_note.pitch);

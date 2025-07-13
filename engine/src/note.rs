@@ -20,7 +20,7 @@ impl Note {
 
         for path in paths {
             let name = path.path().display().to_string();
-            println!("{:?}", name);
+            log::debug!("{:?}", name);
             if name.ends_with(".wav") {
                 layers.push(sample::SampleTemplate::new(name));
             }
@@ -53,8 +53,8 @@ impl Note {
         let idx = (1.0 / 127.0) * (velocity as f64) * depth as f64 + self.que.get_id() as f64;
         self.que.next();
 
-        println!("idx: {} of {}", (idx + 1.0) as usize, self.depth);
-        println!("layer: {:?}", self.layers[idx as usize].filename);
+        log::debug!("idx: {} of {}", (idx + 1.0) as usize, self.depth);
+        log::debug!("layer: {:?}", self.layers[idx as usize].filename);
 
         self.layers[idx as usize].clone()
     }
@@ -71,17 +71,16 @@ pub fn parse_filename(filename: &str) {
         )
             .unwrap();
     }
-    // println!("Parsing {filename}");
     let props = RE.captures(filename).unwrap();
     // TODO
     // Check if match is not None AND provide clear reason of panic
     // if regex can't find required information in filename
-    println!(
+    log::debug!(
         "{:?}{:?}{:?}",
         &props["pitch"], &props["name"], &props["amplitude"]
     );
     let name = props["name"].to_string();
     let pitch = props["pitch"].parse::<u8>().unwrap();
     let amplitude = props["amplitude"].parse::<f64>().unwrap();
-    println!("I am {name} with pitch {pitch} and amplitude {amplitude}");
+    log::debug!("I am {name} with pitch {pitch} and amplitude {amplitude}");
 }

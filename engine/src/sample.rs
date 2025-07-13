@@ -16,7 +16,6 @@ pub struct SampleTemplate {
 impl SampleTemplate {
     pub fn new(path: String) -> Self {
         // open file
-        // println!("Opened {}", path);
         let file = std::fs::File::open(&path).unwrap();
         // decode
         let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
