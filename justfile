@@ -32,3 +32,5 @@ start_live:
     echo "$DAW_PATH"
     echo "$PROJECT_PATH"
     "$DAW_PATH" "$PROJECT_PATH"
+
+launch: refresh_debug start_live
