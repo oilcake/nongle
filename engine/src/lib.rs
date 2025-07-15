@@ -2,7 +2,7 @@ pub mod note;
 pub mod que;
 pub mod sample;
 
-pub fn construct_lib(path: String, que_width: u8) -> std::collections::HashMap<u8, note::Note> {
+pub fn construct_lib(path: &str, que_width: u8) -> std::collections::HashMap<u8, note::Note> {
     let mut notes: std::collections::hash_map::HashMap<u8, note::Note> = Default::default();
     let folders = std::fs::read_dir(path).unwrap();
     for folder in folders {

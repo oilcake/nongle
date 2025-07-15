@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
     let args = Cli::parse();
     // this is my audio data
-    let mut notes = construct_lib(args.library, args.win_size);
+    let mut notes = construct_lib(args.library.as_str(), args.win_size);
     log::debug!("gonna run with {}", &args.voices);
     log::debug!("length of notes {}", &notes.len());
 

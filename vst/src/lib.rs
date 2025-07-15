@@ -19,7 +19,7 @@ impl Default for Nongle {
     fn default() -> Self {
         Self {
             params: Arc::new(NongleParams::default()),
-            notes: construct_lib(LIB_PATH.to_string(), QUE_WIDTH),
+            notes: std::collections::HashMap::new(),
         }
     }
 }
@@ -67,6 +67,7 @@ impl Plugin for Nongle {
         // Resize buffers and perform other potentially expensive initialization operations here.
         // The `reset()` function is always called right after this function. You can remove this
         // function if you do not need it.
+        self.notes = construct_lib(LIB_PATH, QUE_WIDTH);
         true
     }
 
@@ -76,34 +77,33 @@ impl Plugin for Nongle {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        if let NoteEvent::NoteOn {
-                    timing: _,
-                    voice_id: _,
-                    channel: _,
-                    note,
-                    velocity,
-                } = context.next_event().unwrap() {
-                    let note: &mut Note = self.notes.get_mut(&note).unwrap();
-                    let layer = note.get_layer((velocity * 127.0) as u8);
-                    log::debug!("{}", layer.filename)
+        while let Some(event) = context.next_event() {
+            if let NoteEvent::NoteOn {
+                timing: _,
+                voice_id: _,
+                channel: _,
+                note,
+                velocity,
+            } = event
+            {
+                match self.notes.get_mut(&note) {
+                    Some(note) => {
+                        let layer = note.get_layer((velocity * 127.0) as u8);
+                        log::debug!("{}", layer.filename)
+                    }
+                    None => {
+                        log::debug!("No such note");
+                    }
                 }
-
+            }
+        }
+        log::debug!("process was called");
         ProcessStatus::Normal
     }
 }
 
-impl ClapPlugin for Nongle {
-    const CLAP_ID: &'static str = "com.your-domain.vst";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("A short description of your plugin");
-    const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
-    const CLAP_SUPPORT_URL: Option<&'static str> = None;
-
-    // Don't forget to change these features
-    const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo];
-}
-
 impl Vst3Plugin for Nongle {
-    const VST3_CLASS_ID: [u8; 16] = *b"Exactly16Chars!!";
+    const VST3_CLASS_ID: [u8; 16] = *b"Nongle_16Chars11";
 
     // And also don't forget to change these categories
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
@@ -113,5 +113,5 @@ impl Vst3Plugin for Nongle {
     ];
 }
 
-nih_export_clap!(Nongle);
+// nih_export_clap!(Nongle);
 nih_export_vst3!(Nongle);
