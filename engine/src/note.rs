@@ -7,7 +7,7 @@ use std::fs;
 #[derive(Debug, Clone)]
 pub struct Note {
     que: que::Que,
-    layers: Vec<sample::SampleTemplate>,
+    layers: Vec<sample::Sample>,
     depth: usize,
 }
 
@@ -16,13 +16,13 @@ impl Note {
         let mut paths: Vec<_> = fs::read_dir(path).unwrap().map(|f| f.unwrap()).collect();
         paths.sort_by_key(|f| f.path());
 
-        let mut layers: Vec<sample::SampleTemplate> = vec![];
+        let mut layers: Vec<sample::Sample> = vec![];
 
         for path in paths {
             let name = path.path().display().to_string();
             log::debug!("{:?}", name);
             if name.ends_with(".wav") {
-                layers.push(sample::SampleTemplate::new(name));
+                layers.push(sample::Sample::new(name));
             }
         }
 
@@ -45,7 +45,7 @@ impl Note {
             que,
         }
     }
-    pub fn get_layer(&mut self, velocity: u8) -> sample::SampleTemplate {
+    pub fn get_layer(&mut self, velocity: u8) -> sample::Sample {
         // this creepy block is the main peace of magic in this program
         // it computes the actual index of slice of layers when it has to repeat
         // for now it only works for up mode

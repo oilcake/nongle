@@ -1,7 +1,13 @@
 use nih_plug::prelude::*;
-use rand::Rng;
 use rand_pcg::Pcg32;
 use std::sync::Arc;
+
+use engine::note::Note;
+use engine::sample::Sample;
+use engine::{construct_lib};
+
+const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_small";
+const DEFAULT_QUE_WIDTH: u8 = 4;
 
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
@@ -27,6 +33,9 @@ struct Nongle {
     /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
     /// This is incremented by one each time a voice is created.
     next_internal_voice_id: u64,
+
+    // sample library
+    notes: std::collections::HashMap<u8, Note>,
 }
 
 #[derive(Params)]
@@ -76,6 +85,8 @@ struct Voice {
     /// If this voice has polyphonic gain modulation applied, then this contains the normalized
     /// offset and a smoother.
     voice_gain: Option<(f32, Smoother<f32>)>,
+    // sample
+    sample: Sample,
 }
 
 impl Default for Nongle {
@@ -87,6 +98,7 @@ impl Default for Nongle {
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
+            notes: construct_lib(DEFAULT_LIB_PATH, DEFAULT_QUE_WIDTH),
         }
     }
 }
@@ -188,7 +200,7 @@ impl Plugin for Nongle {
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
         let num_samples = buffer.samples();
-        let sample_rate = context.transport().sample_rate;
+        let _sample_rate = context.transport().sample_rate;
         let output = buffer.as_slice();
 
         let mut next_event = context.next_event();
@@ -215,20 +227,16 @@ impl Plugin for Nongle {
                                 note,
                                 velocity,
                             } => {
-                                let initial_phase: f32 = self.prng.gen();
-                                // This starts with the attack portion of the amplitude envelope
-                                let amp_envelope = Smoother::new(SmoothingStyle::Exponential(
-                                    self.params.amp_attack_ms.value(),
-                                ));
-                                amp_envelope.reset(0.0);
-                                amp_envelope.set_target(sample_rate, 1.0);
-
-                                let voice =
-                                    self.start_voice(context, timing, voice_id, channel, note);
-                                voice.velocity_sqrt = velocity.sqrt();
-                                voice.phase = initial_phase;
-                                voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
-                                voice.amp_envelope = amp_envelope;
+                                let note_of_lib = self.notes.get_mut(&note);
+                                match note_of_lib {
+                                    Some(note_of_lib) => {
+                                        let layer = note_of_lib.get_layer((velocity * 128.0) as u8);
+                                        let voice = self
+                                            .start_voice(context, timing, voice_id, channel, note, layer);
+                                        voice.velocity_sqrt = velocity.sqrt();
+                                    }
+                                    None => ()
+                                }
                             }
                             _ => (),
                         };
@@ -283,6 +291,7 @@ impl Plugin for Nongle {
 
                 for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                     let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                    // this is the place where samples from voice's buffer goes out
                     let sample = (voice.phase * 2.0 - 1.0) * amp;
 
                     voice.phase += voice.phase_delta;
@@ -333,6 +342,7 @@ impl Nongle {
         voice_id: Option<i32>,
         channel: u8,
         note: u8,
+        sample: Sample,
     ) -> &mut Voice {
         let new_voice = Voice {
             voice_id: voice_id.unwrap_or_else(|| compute_fallback_voice_id(note, channel)),
@@ -347,6 +357,7 @@ impl Nongle {
             amp_envelope: Smoother::none(),
 
             voice_gain: None,
+            sample: sample,
         };
         self.next_internal_voice_id = self.next_internal_voice_id.wrapping_add(1);
 
