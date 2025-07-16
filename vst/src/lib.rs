@@ -201,7 +201,6 @@ impl Plugin for Nongle {
             // at the block's start. If we receive polyphonic modulation that matches a voice that
             // has an internal note ID that's great than or equal to this one, then we should start
             // the note's smoother at the new value instead of fading in from the global value.
-            let this_sample_internal_voice_id_start = self.next_internal_voice_id;
             'events: loop {
                 match next_event {
                     // If the event happens now, then we'll keep processing events
@@ -230,115 +229,6 @@ impl Plugin for Nongle {
                                 voice.phase = initial_phase;
                                 voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
                                 voice.amp_envelope = amp_envelope;
-                            }
-                            NoteEvent::NoteOff {
-                                timing: _,
-                                voice_id,
-                                channel,
-                                note,
-                                velocity: _,
-                            } => {
-                                self.start_release_for_voices(sample_rate, voice_id, channel, note)
-                            }
-                            NoteEvent::Choke {
-                                timing,
-                                voice_id,
-                                channel,
-                                note,
-                            } => {
-                                self.choke_voices(context, timing, voice_id, channel, note);
-                            }
-                            NoteEvent::PolyModulation {
-                                timing: _,
-                                voice_id,
-                                poly_modulation_id,
-                                normalized_offset,
-                            } => {
-                                // Polyphonic modulation events are matched to voices using the
-                                // voice ID, and to parameters using the poly modulation ID. The
-                                // host will probably send a modulation event every N samples. This
-                                // will happen before the voice is active, and of course also after
-                                // it has been terminated (because the host doesn't know that it
-                                // will be). Because of that, we won't print any assertion failures
-                                // when we can't find the voice index here.
-                                if let Some(voice_idx) = self.get_voice_idx(voice_id) {
-                                    let voice = self.voices[voice_idx].as_mut().unwrap();
-
-                                    match poly_modulation_id {
-                                        GAIN_POLY_MOD_ID => {
-                                            // This should either create a smoother for this
-                                            // modulated parameter or update the existing one.
-                                            // Notice how this uses the parameter's unmodulated
-                                            // normalized value in combination with the normalized
-                                            // offset to create the target plain value
-                                            let target_plain_value = self
-                                                .params
-                                                .gain
-                                                .preview_modulated(normalized_offset);
-                                            let (_, smoother) =
-                                                voice.voice_gain.get_or_insert_with(|| {
-                                                    (
-                                                        normalized_offset,
-                                                        self.params.gain.smoothed.clone(),
-                                                    )
-                                                });
-
-                                            // If this `PolyModulation` events happens on the
-                                            // same sample as a voice's `NoteOn` event, then it
-                                            // should immediately use the modulated value
-                                            // instead of slowly fading in
-                                            if voice.internal_voice_id
-                                                >= this_sample_internal_voice_id_start
-                                            {
-                                                smoother.reset(target_plain_value);
-                                            } else {
-                                                smoother
-                                                    .set_target(sample_rate, target_plain_value);
-                                            }
-                                        }
-                                        n => nih_debug_assert_failure!(
-                                            "Polyphonic modulation sent for unknown poly \
-                                             modulation ID {}",
-                                            n
-                                        ),
-                                    }
-                                }
-                            }
-                            NoteEvent::MonoAutomation {
-                                timing: _,
-                                poly_modulation_id,
-                                normalized_value,
-                            } => {
-                                // Modulation always acts as an offset to the parameter's current
-                                // automated value. So if the host sends a new automation value for
-                                // a modulated parameter, the modulated values/smoothing targets
-                                // need to be updated for all polyphonically modulated voices.
-                                for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
-                                    match poly_modulation_id {
-                                        GAIN_POLY_MOD_ID => {
-                                            let (normalized_offset, smoother) =
-                                                match voice.voice_gain.as_mut() {
-                                                    Some((o, s)) => (o, s),
-                                                    // If the voice does not have existing
-                                                    // polyphonic modulation, then there's nothing
-                                                    // to do here. The global automation/monophonic
-                                                    // modulation has already been taken care of by
-                                                    // the framework.
-                                                    None => continue,
-                                                };
-                                            let target_plain_value =
-                                                self.params.gain.preview_plain(
-                                                    normalized_value + *normalized_offset,
-                                                );
-                                            smoother.set_target(sample_rate, target_plain_value);
-                                        }
-                                        n => nih_debug_assert_failure!(
-                                            "Automation event sent for unknown poly modulation ID \
-                                             {}",
-                                            n
-                                        ),
-                                    }
-                                }
                             }
                             _ => (),
                         };
@@ -434,14 +324,6 @@ impl Plugin for Nongle {
 }
 
 impl Nongle {
-    /// Get the index of a voice by its voice ID, if the voice exists. This does not immediately
-    /// return a reference to the voice to avoid lifetime issues.
-    fn get_voice_idx(&mut self, voice_id: i32) -> Option<usize> {
-        self.voices
-            .iter_mut()
-            .position(|voice| matches!(voice, Some(voice) if voice.voice_id == voice_id))
-    }
-
     /// Start a new voice with the given voice ID. If all voices are currently in use, the oldest
     /// voice will be stolen. Returns a reference to the new voice.
     fn start_voice(
@@ -500,83 +382,6 @@ impl Nongle {
 
                 *oldest_voice = Some(new_voice);
                 return oldest_voice.as_mut().unwrap();
-            }
-        }
-    }
-
-    /// Start the release process for one or more voice by changing their amplitude envelope. If
-    /// `voice_id` is not provided, then this will terminate all matching voices.
-    fn start_release_for_voices(
-        &mut self,
-        sample_rate: f32,
-        voice_id: Option<i32>,
-        channel: u8,
-        note: u8,
-    ) {
-        for voice in self.voices.iter_mut() {
-            match voice {
-                Some(Voice {
-                    voice_id: candidate_voice_id,
-                    channel: candidate_channel,
-                    note: candidate_note,
-                    releasing,
-                    amp_envelope,
-                    ..
-                }) if voice_id == Some(*candidate_voice_id)
-                    || (channel == *candidate_channel && note == *candidate_note) =>
-                {
-                    *releasing = true;
-                    amp_envelope.style =
-                        SmoothingStyle::Exponential(self.params.amp_release_ms.value());
-                    amp_envelope.set_target(sample_rate, 0.0);
-
-                    // If this targetted a single voice ID, we're done here. Otherwise there may be
-                    // multiple overlapping voices as we enabled support for that in the
-                    // `PolyModulationConfig`.
-                    if voice_id.is_some() {
-                        return;
-                    }
-                }
-                _ => (),
-            }
-        }
-    }
-
-    /// Immediately terminate one or more voice, removing it from the pool and informing the host
-    /// that the voice has ended. If `voice_id` is not provided, then this will terminate all
-    /// matching voices.
-    fn choke_voices(
-        &mut self,
-        context: &mut impl ProcessContext<Self>,
-        sample_offset: u32,
-        voice_id: Option<i32>,
-        channel: u8,
-        note: u8,
-    ) {
-        for voice in self.voices.iter_mut() {
-            match voice {
-                Some(Voice {
-                    voice_id: candidate_voice_id,
-                    channel: candidate_channel,
-                    note: candidate_note,
-                    ..
-                }) if voice_id == Some(*candidate_voice_id)
-                    || (channel == *candidate_channel && note == *candidate_note) =>
-                {
-                    context.send_event(NoteEvent::VoiceTerminated {
-                        timing: sample_offset,
-                        // Notice how we always send the terminated voice ID here
-                        voice_id: Some(*candidate_voice_id),
-                        channel,
-                        note,
-                    });
-                    *voice = None;
-
-                    if voice_id.is_some() {
-                        return;
-                    }
-                }
-                _ => (),
             }
         }
     }
