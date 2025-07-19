@@ -2,9 +2,9 @@ use nih_plug::prelude::*;
 use rand_pcg::Pcg32;
 use std::sync::Arc;
 
+use engine::construct_lib;
 use engine::note::Note;
 use engine::sample::Sample;
-use engine::{construct_lib};
 
 const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_small";
 const DEFAULT_QUE_WIDTH: u8 = 4;
@@ -70,12 +70,6 @@ struct Voice {
     /// The square root of the note's velocity. This is used as a gain multiplier.
     velocity_sqrt: f32,
 
-    /// The voice's current phase. This is randomized at the start of the voice
-    phase: f32,
-    /// The phase increment. This is based on the voice's frequency, derived from the note index.
-    /// Since we don't support pitch expressions or pitch bend, this value stays constant for the
-    /// duration of the voice.
-    phase_delta: f32,
     /// Whether the key has been released and the voice is in its release stage. The voice will be
     /// terminated when the amplitude envelope hits 0 while the note is releasing.
     releasing: bool,
@@ -86,7 +80,22 @@ struct Voice {
     /// offset and a smoother.
     voice_gain: Option<(f32, Smoother<f32>)>,
     // sample
-    sample: Sample,
+    sample: Arc<Sample>,
+    current_frame: usize,
+}
+
+impl Iterator for Voice {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        if self.current_frame < self.sample.len() {
+            let sample = self.sample.samples_as_ref()[self.current_frame];
+            self.current_frame += 1;
+            Some(sample)
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for Nongle {
@@ -231,11 +240,12 @@ impl Plugin for Nongle {
                                 match note_of_lib {
                                     Some(note_of_lib) => {
                                         let layer = note_of_lib.get_layer((velocity * 128.0) as u8);
-                                        let voice = self
-                                            .start_voice(context, timing, voice_id, channel, note, layer);
+                                        let voice = self.start_voice(
+                                            context, timing, voice_id, channel, note, layer,
+                                        );
                                         voice.velocity_sqrt = velocity.sqrt();
                                     }
-                                    None => ()
+                                    None => (),
                                 }
                             }
                             _ => (),
@@ -292,13 +302,8 @@ impl Plugin for Nongle {
                 for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                     let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
                     // this is the place where samples from voice's buffer goes out
-                    let sample = (voice.phase * 2.0 - 1.0) * amp;
 
-                    voice.phase += voice.phase_delta;
-                    if voice.phase >= 1.0 {
-                        voice.phase -= 1.0;
-                    }
-
+                    let sample = amp * voice.next().unwrap_or(0.0);
                     output[0][sample_idx] += sample;
                     output[1][sample_idx] += sample;
                 }
@@ -342,7 +347,7 @@ impl Nongle {
         voice_id: Option<i32>,
         channel: u8,
         note: u8,
-        sample: Sample,
+        sample: Arc<Sample>,
     ) -> &mut Voice {
         let new_voice = Voice {
             voice_id: voice_id.unwrap_or_else(|| compute_fallback_voice_id(note, channel)),
@@ -351,14 +356,14 @@ impl Nongle {
             note,
             velocity_sqrt: 1.0,
 
-            phase: 0.0,
-            phase_delta: 0.0,
             releasing: false,
             amp_envelope: Smoother::none(),
 
             voice_gain: None,
             sample: sample,
+            current_frame: 0,
         };
+
         self.next_internal_voice_id = self.next_internal_voice_id.wrapping_add(1);
 
         // Can't use `.iter_mut().find()` here because nonlexical lifetimes don't apply to return

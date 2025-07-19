@@ -1,13 +1,15 @@
-use crate::{que, sample};
-
+use std::sync::Arc;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fs;
 
+use crate::que;
+use crate::sample::Sample;
+
 #[derive(Debug, Clone)]
 pub struct Note {
     que: que::Que,
-    layers: Vec<sample::Sample>,
+    layers: Vec<Arc<Sample>>,
     depth: usize,
 }
 
@@ -16,13 +18,13 @@ impl Note {
         let mut paths: Vec<_> = fs::read_dir(path).unwrap().map(|f| f.unwrap()).collect();
         paths.sort_by_key(|f| f.path());
 
-        let mut layers: Vec<sample::Sample> = vec![];
+        let mut layers: Vec<Arc<Sample>> = vec![];
 
         for path in paths {
             let name = path.path().display().to_string();
             log::debug!("{:?}", name);
             if name.ends_with(".wav") {
-                layers.push(sample::Sample::new(name));
+                layers.push(Arc::new(Sample::new(name)));
             }
         }
 
@@ -45,18 +47,16 @@ impl Note {
             que,
         }
     }
-    pub fn get_layer(&mut self, velocity: u8) -> sample::Sample {
+    pub fn get_layer(&mut self, velocity: u8) -> Arc<Sample> {
         // this creepy block is the main peace of magic in this program
         // it computes the actual index of slice of layers when it has to repeat
         // for now it only works for up mode
         let depth = self.depth - self.que.width;
         let idx = (1.0 / 127.0) * (velocity as f64) * depth as f64 + self.que.get_id() as f64;
         self.que.next();
-
-        log::debug!("idx: {} of {}", (idx + 1.0) as usize, self.depth);
-        log::debug!("layer: {:?}", self.layers[idx as usize].filename);
-
-        self.layers[idx as usize].clone()
+        let idx = idx as usize;
+        // Note that this is an Arc
+        Arc::clone(&self.layers[idx])
     }
 }
 

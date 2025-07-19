@@ -7,6 +7,7 @@ pub struct Sample {
     /// to be cloned and used multiple times
     pub filename: String,
     samples: Vec<f32>,
+    len: usize,
 }
 
 impl Sample {
@@ -16,12 +17,18 @@ impl Sample {
         // decode
         let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
         let samples: Vec<f32> = source.convert_samples().collect();
+        let len = samples.len();
         Self {
             filename: path,
             samples: samples,
+            len,
         }
     }
     pub fn samples_as_ref(&self) -> &Vec<f32> {
         &self.samples
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
