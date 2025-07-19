@@ -142,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             // add samples to buffer(my one)
             let layer = note.unwrap().get_layer(midi_note.velocity);
             let mut samples_lock = buffer_input.lock().unwrap();
-            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_vec());
+            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.as_ref());
         }
     }
     Ok(())
