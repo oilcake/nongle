@@ -1,5 +1,4 @@
-use nih_plug::prelude::*;
-use rand_pcg::Pcg32;
+use nih_plug::{prelude::*};
 use std::sync::Arc;
 
 use engine::construct_lib;
@@ -25,9 +24,6 @@ const GAIN_POLY_MOD_ID: u32 = 0;
 struct Nongle {
     params: Arc<NongleParams>,
 
-    /// A pseudo-random number generator. This will always be reseeded with the same seed when the
-    /// synth is reset. That way the output is deterministic when rendering multiple times.
-    prng: Pcg32,
     /// The synth's voices. Inactive voices will be set to `None` values.
     voices: [Option<Voice>; NUM_VOICES as usize],
     /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
@@ -72,13 +68,13 @@ struct Voice {
 
     /// Whether the key has been released and the voice is in its release stage. The voice will be
     /// terminated when the amplitude envelope hits 0 while the note is releasing.
-    releasing: bool,
+    // releasing: bool,
     /// Fades between 0 and 1 with timings based on the global attack and release settings.
-    amp_envelope: Smoother<f32>,
+    // amp_envelope: Smoother<f32>,
 
     /// If this voice has polyphonic gain modulation applied, then this contains the normalized
     /// offset and a smoother.
-    voice_gain: Option<(f32, Smoother<f32>)>,
+    // voice_gain: Option<(f32, Smoother<f32>)>,
     // sample
     sample: Arc<Sample>,
     current_frame: usize,
@@ -103,7 +99,6 @@ impl Default for Nongle {
         Self {
             params: Arc::new(NongleParams::default()),
 
-            prng: Pcg32::new(420, 1337),
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
@@ -190,9 +185,6 @@ impl Plugin for Nongle {
     // `context.set_current_voice_capacity()` in `initialize()` and in `process()` (when the
     // capacity changes) to inform the host about this.
     fn reset(&mut self) {
-        // This ensures the output is at least somewhat deterministic when rendering to audio
-        self.prng = Pcg32::new(420, 1337);
-
         self.voices.fill(None);
         self.next_internal_voice_id = 0;
     }
@@ -233,21 +225,18 @@ impl Plugin for Nongle {
                                 timing,
                                 voice_id,
                                 channel,
-                                note,
+                                note: pitch,
                                 velocity,
-                            } => {
-                                let note_of_lib = self.notes.get_mut(&note);
-                                match note_of_lib {
-                                    Some(note_of_lib) => {
-                                        let layer = note_of_lib.get_layer((velocity * 128.0) as u8);
-                                        let voice = self.start_voice(
-                                            context, timing, voice_id, channel, note, layer,
-                                        );
-                                        voice.velocity_sqrt = velocity.sqrt();
-                                    }
-                                    None => (),
+                            } => match self.notes.get_mut(&pitch) {
+                                Some(note) => {
+                                    let layer = note.get_layer((velocity * 128.0) as u8);
+                                    let voice = self.start_voice(
+                                        context, timing, voice_id, channel, pitch, layer,
+                                    );
+                                    voice.velocity_sqrt = velocity.sqrt();
                                 }
-                            }
+                                None => (),
+                            },
                             _ => (),
                         };
 
@@ -272,11 +261,11 @@ impl Plugin for Nongle {
             // be possible to avoid this completely by simply always copying the smoother into the
             // voice's struct, but that may not be realistic when the plugin has hundreds of
             // parameters. The `voice_*` arrays are scratch arrays that an individual voice can use.
-            let block_len = block_end - block_start;
-            let mut gain = [0.0; MAX_BLOCK_SIZE];
-            let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
-            let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
-            self.params.gain.smoothed.next_block(&mut gain, block_len);
+            // let block_len = block_end - block_start;
+            // let mut gain = [0.0; MAX_BLOCK_SIZE];
+            // let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
+            // let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
+            // self.params.gain.smoothed.next_block(&mut gain, block_len);
 
             // TODO: Some form of band limiting
             // TODO: Filter
@@ -284,26 +273,27 @@ impl Plugin for Nongle {
                 // Depending on whether the voice has polyphonic modulation applied to it,
                 // either the global parameter values are used, or the voice's smoother is used
                 // to generate unique modulated values for that voice
-                let gain = match &voice.voice_gain {
-                    Some((_, smoother)) => {
-                        smoother.next_block(&mut voice_gain, block_len);
-                        &voice_gain
-                    }
-                    None => &gain,
-                };
+                // let _gain = match &voice.voice_gain {
+                //     Some((_, smoother)) => {
+                //         smoother.next_block(&mut voice_gain, block_len);
+                //         &voice_gain
+                //     }
+                //     None => &gain,
+                // };
 
                 // This is an exponential smoother repurposed as an AR envelope with values between
                 // 0 and 1. When a note off event is received, this envelope will start fading out
                 // again. When it reaches 0, we will terminate the voice.
-                voice
-                    .amp_envelope
-                    .next_block(&mut voice_amp_envelope, block_len);
+                // voice
+                //     .amp_envelope
+                //     .next_block(&mut voice_amp_envelope, block_len);
 
-                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
-                    let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                for sample_idx in block_start..block_end {
+                    // let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
                     // this is the place where samples from voice's buffer goes out
 
-                    let sample = amp * voice.next().unwrap_or(0.0);
+                    // let sample = amp * voice.next().unwrap_or(0.0);
+                    let sample = voice.next().unwrap_or(0.0);
                     output[0][sample_idx] += sample;
                     output[1][sample_idx] += sample;
                 }
@@ -313,7 +303,7 @@ impl Plugin for Nongle {
             // the previous loop but this is simpler.
             for voice in self.voices.iter_mut() {
                 match voice {
-                    Some(v) if v.releasing && v.amp_envelope.previous_value() == 0.0 => {
+                    Some(v) if v.current_frame == v.sample.len() => {
                         // This event is very important, as it allows the host to manage its own modulation
                         // voices
                         context.send_event(NoteEvent::VoiceTerminated {
@@ -356,10 +346,10 @@ impl Nongle {
             note,
             velocity_sqrt: 1.0,
 
-            releasing: false,
-            amp_envelope: Smoother::none(),
+            // releasing: false,
+            // amp_envelope: Smoother::none(),
 
-            voice_gain: None,
+            // voice_gain: None,
             sample: sample,
             current_frame: 0,
         };
