@@ -1,4 +1,4 @@
-use nih_plug::{prelude::*};
+use nih_plug::prelude::*;
 use std::sync::Arc;
 
 use engine::construct_lib;
@@ -14,13 +14,7 @@ const NUM_VOICES: u32 = 16;
 /// values to buffers since these values may need to be reused for multiple voices.
 const MAX_BLOCK_SIZE: usize = 64;
 
-// Polyphonic modulation works by assigning integer IDs to parameters. Pattern matching on these in
-// `PolyModulation` and `MonoAutomation` events makes it possible to easily link these events to the
-// correct parameter.
-const GAIN_POLY_MOD_ID: u32 = 0;
-
-/// A simple polyphonic synthesizer with support for CLAP's polyphonic modulation. See
-/// `NoteEvent::PolyModulation` for another source of information on how to use this.
+/// A sampler with dynamic velocity layering
 struct Nongle {
     params: Arc<NongleParams>,
 
@@ -34,18 +28,8 @@ struct Nongle {
     notes: std::collections::HashMap<u8, Note>,
 }
 
-#[derive(Params)]
-struct NongleParams {
-    /// A voice's gain. This can be polyphonically modulated.
-    #[id = "gain"]
-    gain: FloatParam,
-    /// The amplitude envelope attack time. This is the same for every voice.
-    #[id = "amp_atk"]
-    amp_attack_ms: FloatParam,
-    /// The amplitude envelope release time. This is the same for every voice.
-    #[id = "amp_rel"]
-    amp_release_ms: FloatParam,
-}
+#[derive(Default, Params)]
+struct NongleParams {}
 
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
 /// struct of arrays instead of having a struct for each voice.
@@ -66,16 +50,7 @@ struct Voice {
     /// The square root of the note's velocity. This is used as a gain multiplier.
     velocity_sqrt: f32,
 
-    /// Whether the key has been released and the voice is in its release stage. The voice will be
-    /// terminated when the amplitude envelope hits 0 while the note is releasing.
-    // releasing: bool,
-    /// Fades between 0 and 1 with timings based on the global attack and release settings.
-    // amp_envelope: Smoother<f32>,
-
-    /// If this voice has polyphonic gain modulation applied, then this contains the normalized
-    /// offset and a smoother.
-    // voice_gain: Option<(f32, Smoother<f32>)>,
-    // sample
+    /// Actual samples to use during playback
     sample: Arc<Sample>,
     current_frame: usize,
 }
@@ -103,55 +78,6 @@ impl Default for Nongle {
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
             notes: construct_lib(DEFAULT_LIB_PATH, DEFAULT_QUE_WIDTH),
-        }
-    }
-}
-
-impl Default for NongleParams {
-    fn default() -> Self {
-        Self {
-            gain: FloatParam::new(
-                "Gain",
-                util::db_to_gain(-12.0),
-                // Because we're representing gain as decibels the range is already logarithmic
-                FloatRange::Linear {
-                    min: util::db_to_gain(-36.0),
-                    max: util::db_to_gain(0.0),
-                },
-            )
-            // This enables polyphonic mdoulation for this parameter by representing all related
-            // events with this ID. After enabling this, the plugin **must** start sending
-            // `VoiceTerminated` events to the host whenever a voice has ended.
-            .with_poly_modulation_id(GAIN_POLY_MOD_ID)
-            .with_smoother(SmoothingStyle::Logarithmic(5.0))
-            .with_unit(" dB")
-            .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
-            .with_string_to_value(formatters::s2v_f32_gain_to_db()),
-            amp_attack_ms: FloatParam::new(
-                "Attack",
-                200.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 2000.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            // These parameters are global (and they cannot be changed once the voice has started).
-            // They also don't need any smoothing themselves because they affect smoothing
-            // coefficients.
-            .with_step_size(0.1)
-            .with_unit(" ms"),
-            amp_release_ms: FloatParam::new(
-                "Release",
-                100.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 2000.0,
-                    factor: FloatRange::skew_factor(-1.0),
-                },
-            )
-            .with_step_size(0.1)
-            .with_unit(" ms"),
         }
     }
 }
@@ -218,8 +144,6 @@ impl Plugin for Nongle {
                 match next_event {
                     // If the event happens now, then we'll keep processing events
                     Some(event) if (event.timing() as usize) <= block_start => {
-                        // This synth doesn't support any of the polyphonic expression events. A
-                        // real synth plugin however will want to support those.
                         match event {
                             NoteEvent::NoteOn {
                                 timing,
@@ -256,43 +180,9 @@ impl Plugin for Nongle {
             output[0][block_start..block_end].fill(0.0);
             output[1][block_start..block_end].fill(0.0);
 
-            // These are the smoothed global parameter values. These are used for voices that do not
-            // have polyphonic modulation applied to them. With a plugin as simple as this it would
-            // be possible to avoid this completely by simply always copying the smoother into the
-            // voice's struct, but that may not be realistic when the plugin has hundreds of
-            // parameters. The `voice_*` arrays are scratch arrays that an individual voice can use.
-            // let block_len = block_end - block_start;
-            // let mut gain = [0.0; MAX_BLOCK_SIZE];
-            // let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
-            // let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
-            // self.params.gain.smoothed.next_block(&mut gain, block_len);
-
-            // TODO: Some form of band limiting
-            // TODO: Filter
             for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
-                // Depending on whether the voice has polyphonic modulation applied to it,
-                // either the global parameter values are used, or the voice's smoother is used
-                // to generate unique modulated values for that voice
-                // let _gain = match &voice.voice_gain {
-                //     Some((_, smoother)) => {
-                //         smoother.next_block(&mut voice_gain, block_len);
-                //         &voice_gain
-                //     }
-                //     None => &gain,
-                // };
-
-                // This is an exponential smoother repurposed as an AR envelope with values between
-                // 0 and 1. When a note off event is received, this envelope will start fading out
-                // again. When it reaches 0, we will terminate the voice.
-                // voice
-                //     .amp_envelope
-                //     .next_block(&mut voice_amp_envelope, block_len);
-
                 for sample_idx in block_start..block_end {
-                    // let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
-                    // this is the place where samples from voice's buffer goes out
-
-                    // let sample = amp * voice.next().unwrap_or(0.0);
+                    // this is the place where samples from voice's iterator goes out
                     let sample = voice.next().unwrap_or(0.0);
                     output[0][sample_idx] += sample;
                     output[1][sample_idx] += sample;
@@ -345,11 +235,6 @@ impl Nongle {
             channel,
             note,
             velocity_sqrt: 1.0,
-
-            // releasing: false,
-            // amp_envelope: Smoother::none(),
-
-            // voice_gain: None,
             sample: sample,
             current_frame: 0,
         };
