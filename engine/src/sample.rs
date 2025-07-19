@@ -21,7 +21,7 @@ impl Sample {
             samples: samples,
         }
     }
-    pub fn as_ref(&self) -> &Vec<f32> {
+    pub fn samples_as_ref(&self) -> &Vec<f32> {
         &self.samples
     }
 }
