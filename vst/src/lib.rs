@@ -134,79 +134,7 @@ impl Plugin for Nongle {
         let mut block_start: usize = 0;
         let mut block_end: usize = MAX_BLOCK_SIZE.min(num_samples);
         while block_start < num_samples {
-            // First of all, handle all note events that happen at the start of the block, and cut
-            // the block short if another event happens before the end of it. To handle polyphonic
-            // modulation for new notes properly, we'll keep track of the next internal note index
-            // at the block's start. If we receive polyphonic modulation that matches a voice that
-            // has an internal note ID that's great than or equal to this one, then we should start
-            // the note's smoother at the new value instead of fading in from the global value.
-            'events: loop {
-                match next_event {
-                    // If the event happens now, then we'll keep processing events
-                    Some(event) if (event.timing() as usize) <= block_start => {
-                        match event {
-                            NoteEvent::NoteOn {
-                                timing,
-                                voice_id,
-                                channel,
-                                note: pitch,
-                                velocity,
-                            } => match self.notes.get_mut(&pitch) {
-                                Some(note) => {
-                                    let layer = note.get_layer((velocity * 128.0) as u8);
-                                    let voice = self.start_voice(
-                                        context, timing, voice_id, channel, pitch, layer,
-                                    );
-                                    voice.velocity_sqrt = velocity.sqrt();
-                                }
-                                None => (),
-                            },
-                            _ => (),
-                        };
-
-                        next_event = context.next_event();
-                    }
-                    // If the event happens before the end of the block, then the block should be cut
-                    // short so the next block starts at the event
-                    Some(event) if (event.timing() as usize) < block_end => {
-                        block_end = event.timing() as usize;
-                        break 'events;
-                    }
-                    _ => break 'events,
-                }
-            }
-
-            // We'll start with silence, and then add the output from the active voices
-            output[0][block_start..block_end].fill(0.0);
-            output[1][block_start..block_end].fill(0.0);
-
-            for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
-                for sample_idx in block_start..block_end {
-                    // this is the place where samples from voice's iterator goes out
-                    let sample = voice.next().unwrap_or(0.0);
-                    output[0][sample_idx] += sample;
-                    output[1][sample_idx] += sample;
-                }
-            }
-
-            // Terminate voices whose release period has fully ended. This could be done as part of
-            // the previous loop but this is simpler.
-            for voice in self.voices.iter_mut() {
-                match voice {
-                    Some(v) if v.current_frame == v.sample.len() => {
-                        // This event is very important, as it allows the host to manage its own modulation
-                        // voices
-                        context.send_event(NoteEvent::VoiceTerminated {
-                            timing: block_end as u32,
-                            voice_id: Some(v.voice_id),
-                            channel: v.channel,
-                            note: v.note,
-                        });
-                        *voice = None;
-                    }
-                    _ => (),
-                }
-            }
+            block_end = self.handle_event(&mut next_event, context, output, block_start, block_end);
 
             // And then just keep processing blocks until we've run out of buffer to fill
             block_start = block_end;
@@ -218,6 +146,92 @@ impl Plugin for Nongle {
 }
 
 impl Nongle {
+    /// Handle MIDI events for a single block, process audio for active voices, and terminate finished voices.
+    /// Returns the updated block_end value.
+    fn handle_event(
+        &mut self,
+        next_event: &mut Option<NoteEvent<()>>,
+        context: &mut impl ProcessContext<Self>,
+        output: &mut [&mut [f32]],
+        block_start: usize,
+        mut block_end: usize,
+    ) -> usize {
+        // First of all, handle all note events that happen at the start of the block, and cut
+        // the block short if another event happens before the end of it. To handle polyphonic
+        // modulation for new notes properly, we'll keep track of the next internal note index
+        // at the block's start. If we receive polyphonic modulation that matches a voice that
+        // has an internal note ID that's great than or equal to this one, then we should start
+        // the note's smoother at the new value instead of fading in from the global value.
+        'events: loop {
+            match *next_event {
+                // If the event happens now, then we'll keep processing events
+                Some(event) if (event.timing() as usize) <= block_start => {
+                    match event {
+                        NoteEvent::NoteOn {
+                            timing,
+                            voice_id,
+                            channel,
+                            note: pitch,
+                            velocity,
+                        } => match self.notes.get_mut(&pitch) {
+                            Some(note) => {
+                                let layer = note.get_layer((velocity * 128.0) as u8);
+                                let voice = self
+                                    .start_voice(context, timing, voice_id, channel, pitch, layer);
+                                voice.velocity_sqrt = velocity.sqrt();
+                            }
+                            None => (),
+                        },
+                        _ => (),
+                    };
+
+                    *next_event = context.next_event();
+                }
+                // If the event happens before the end of the block, then the block should be cut
+                // short so the next block starts at the event
+                Some(event) if (event.timing() as usize) < block_end => {
+                    block_end = event.timing() as usize;
+                    break 'events;
+                }
+                _ => break 'events,
+            }
+        }
+
+        // We'll start with silence, and then add the output from the active voices
+        output[0][block_start..block_end].fill(0.0);
+        output[1][block_start..block_end].fill(0.0);
+
+        for voice in self.voices.iter_mut().filter_map(|v| v.as_mut()) {
+            for sample_idx in block_start..block_end {
+                // this is the place where samples from voice's iterator goes out
+                let sample = voice.next().unwrap_or(0.0);
+                output[0][sample_idx] += sample;
+                output[1][sample_idx] += sample;
+            }
+        }
+
+        // Terminate voices whose release period has fully ended. This could be done as part of
+        // the previous loop but this is simpler.
+        for voice in self.voices.iter_mut() {
+            match voice {
+                Some(v) if v.current_frame == v.sample.len() => {
+                    // This event is very important, as it allows the host to manage its own modulation
+                    // voices
+                    context.send_event(NoteEvent::VoiceTerminated {
+                        timing: block_end as u32,
+                        voice_id: Some(v.voice_id),
+                        channel: v.channel,
+                        note: v.note,
+                    });
+                    *voice = None;
+                }
+                _ => (),
+            }
+        }
+
+        block_end
+    }
+
     /// Start a new voice with the given voice ID. If all voices are currently in use, the oldest
     /// voice will be stolen. Returns a reference to the new voice.
     fn start_voice(
