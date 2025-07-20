@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use lazy_static::lazy_static;
-use regex::Regex;
 use std::fs;
 
 use crate::que;
@@ -58,29 +56,4 @@ impl Note {
         // Note that this is an Arc
         Arc::clone(&self.layers[idx])
     }
-}
-
-// actually useless for now
-// Probably in the future may help parse filenames to attach various libraries
-pub fn parse_filename(filename: &str) {
-    lazy_static! {
-        // lazy static makes regex compile only with the first call
-        // and each subsequent calls use precompiled instance
-        static ref RE: Regex = Regex::new(
-            r"(?P<pitch>\d{2})_(?P<name>[ABCDEFGH]#?\d{1})_(?P<amplitude>\d\.\d{5})\.aif"
-        )
-            .unwrap();
-    }
-    let props = RE.captures(filename).unwrap();
-    // TODO
-    // Check if match is not None AND provide clear reason of panic
-    // if regex can't find required information in filename
-    log::debug!(
-        "{:?}{:?}{:?}",
-        &props["pitch"], &props["name"], &props["amplitude"]
-    );
-    let name = props["name"].to_string();
-    let pitch = props["pitch"].parse::<u8>().unwrap();
-    let amplitude = props["amplitude"].parse::<f64>().unwrap();
-    log::debug!("I am {name} with pitch {pitch} and amplitude {amplitude}");
 }
