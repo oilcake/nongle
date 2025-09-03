@@ -20,11 +20,11 @@ refresh_release: build_release clean install
 
 # standalone section
 run_big:
-    cargo build --release
+    cargo build --package standalone
     {{nongle_standalone_release}} --library ./Xy_samples_big/ --voices 8 --win-size 3
 
 run_small:
-    cargo build
+    cargo build --package standalone
     RUST_LOG=debug {{nongle_standalone_debug}} --library ./Xy_samples_small/ --voices 8 --win-size 3
 
 # tools
