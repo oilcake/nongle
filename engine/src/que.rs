@@ -13,15 +13,19 @@ pub enum QueMode {
 #[derive(Copy, Clone, Debug)]
 pub struct Que {
     id: usize,
-    pub width: usize,
+    // width is a width of moving window
+    width: usize,
+    // depth is a number of layers in corrsponding note
+    depth: usize,
     mode : QueMode
 }
 
 impl Que {
-    pub fn new(width: usize, mode: QueMode) -> Self {
+    pub fn new(width: usize, depth: usize, mode: QueMode) -> Self {
         Que{
             id: 0,
             width,
+            depth,
             mode
         }
     }
@@ -33,6 +37,12 @@ impl Que {
     pub fn get_id(&self) -> usize {
         self.id
     }
+    pub fn depth(&self) -> usize {
+        self.depth
+    }
+    pub fn width(&self) -> usize {
+        self.width
+    }
 }
 
 
@@ -42,7 +52,7 @@ mod tests {
 
     #[test]
     fn next_index_in_que_down() {
-        let mut que = Que::new(2, QueMode::Down);
+        let mut que = Que::new(2, 4, QueMode::Down);
         que.next();
         que.next();
         que.next();

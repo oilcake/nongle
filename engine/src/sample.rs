@@ -6,7 +6,7 @@ pub struct Sample {
     /// Represents original sound stored in memory
     /// to be cloned and used multiple times
     pub filename: String,
-    samples: Vec<f32>,
+    sample: Vec<f32>,
     len: usize,
 }
 
@@ -20,12 +20,12 @@ impl Sample {
         let len = samples.len();
         Self {
             filename: path,
-            samples: samples,
+            sample: samples,
             len,
         }
     }
-    pub fn samples_as_ref(&self) -> &Vec<f32> {
-        &self.samples
+    pub fn sample(&self) -> &Vec<f32> {
+        &self.sample
     }
 
     pub fn len(&self) -> usize {
