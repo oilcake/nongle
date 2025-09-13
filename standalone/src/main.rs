@@ -139,11 +139,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             log::debug!("\nNo such note");
             continue;
         }
-        if let Some(layer) = notes.get_note(midi_note.pitch, idx.unwrap()) {
-            // add samples to buffer
-            let mut samples_lock = buffer_input.lock().unwrap();
-            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.sample());
-        }
+        let layer = notes.get_note(midi_note.pitch, idx.unwrap());
+        // add samples to buffer
+        let mut samples_lock = buffer_input.lock().unwrap();
+        *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.sample());
     }
     Ok(())
 }
