@@ -1,12 +1,10 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
 
-use engine::{construct_lib, Library};
-use engine::note::Note;
-use engine::sample::Sample;
+use engine::{sample::Sample, state::State, Library};
 
 const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_small";
-const DEFAULT_QUE_WIDTH: u8 = 4;
+const DEFAULT_QUE_WIDTH: usize = 4;
 
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
@@ -25,7 +23,8 @@ struct Nongle<'a> {
     next_internal_voice_id: u64,
 
     // sample library
-    notes: &'static mut Library
+    lib: &'static Library,
+    state: State
 }
 
 #[derive(Default, Params)]
@@ -60,7 +59,7 @@ impl Iterator for Voice<'_> {
 
     fn next(&mut self) -> Option<f32> {
         if self.current_frame < self.sample.len() {
-            let sample = self.sample.samples_as_ref()[self.current_frame];
+            let sample = self.sample.sample()[self.current_frame];
             self.current_frame += 1;
             Some(sample)
         } else {
@@ -71,13 +70,16 @@ impl Iterator for Voice<'_> {
 
 impl Default for Nongle<'static> {
     fn default() -> Self {
+        let lib = Library::new(DEFAULT_LIB_PATH);
+        let state = lib.new_state(DEFAULT_QUE_WIDTH);
         Self {
             params: Arc::new(NongleParams::default()),
 
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
-            notes: Box::leak(Box::new(construct_lib(DEFAULT_LIB_PATH, DEFAULT_QUE_WIDTH))),
+            lib: Box::leak(Box::new(lib)),
+            state
         }
     }
 }
@@ -173,9 +175,9 @@ impl Nongle<'static> {
                             channel,
                             note: pitch,
                             velocity,
-                        } => match self.notes.get_mut(&pitch) {
-                            Some(note) => {
-                                let layer = note.get_layer((velocity * 128.0) as u8);
+                        } => match self.state.get_layer(pitch, (velocity * 128.0) as u8) {
+                            Some(idx) => {
+                                let layer = self.lib.get_note(pitch, idx);
                                 let voice = self
                                     .start_voice(context, timing, voice_id, channel, pitch, layer);
                                 voice.velocity_sqrt = velocity.sqrt();
@@ -241,7 +243,7 @@ impl Nongle<'static> {
         voice_id: Option<i32>,
         channel: u8,
         note: u8,
-        sample: &'a Sample,
+        sample: &'static Sample,
     ) -> &mut Voice {
         let new_voice = Voice {
             voice_id: voice_id.unwrap_or_else(|| compute_fallback_voice_id(note, channel)),

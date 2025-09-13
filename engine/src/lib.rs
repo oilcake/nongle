@@ -24,11 +24,13 @@ impl Library {
     }
 
     /// assumes that you got velocity as idx from state module and state was properly updated
-    pub fn get_note(&self, pitch: u8, velocity_as_idx: usize) -> Option<&Sample> {
+    pub fn get_note(&self, pitch: u8, velocity_as_idx: usize) -> &Sample {
         if let Some(note) = self.0.get(&pitch) {
-            return Some(note.get_layer(velocity_as_idx as usize));
+            return note.get_layer(velocity_as_idx as usize);
         }
-        None
+        // I assume that this will never happen cause index was correctly calculated
+        // and can only have values which are valid indexes in this note
+        panic!("Note with pitch {} not found, looks like an error in state logic", pitch);
     }
 
     pub fn new_state(&self, default_que_width: usize) -> state::State {
