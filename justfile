@@ -21,7 +21,7 @@ refresh_release: build_release clean install
 # standalone section
 run_big:
     cargo build --package standalone
-    {{nongle_standalone_release}} --library ./Xy_samples_big/ --voices 8 --win-size 3
+    {{nongle_standalone_debug}} --library ./Xy_samples_big/ --voices 8 --win-size 3
 
 run_small:
     cargo build --package standalone

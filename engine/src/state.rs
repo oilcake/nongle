@@ -1,6 +1,9 @@
+use log::debug;
+
 use crate::que::{Que, QueMode};
 use std::{collections::HashMap, usize};
 
+#[derive(Debug)]
 pub struct State(HashMap<u8, Que>);
 
 impl State {
@@ -24,6 +27,7 @@ impl State {
         // it computes the actual index of slice of layers when it has to repeat.
         // For now it only works for QueMode::Up mode.
         if let Some(que) = self.0.get_mut(&pitch) {
+            debug!("pitch: {pitch}, velocity: {velocity}, got note");
             let depth = que.depth() - que.width();
             let idx = (1.0 / 127.0) * (velocity as f64) * depth as f64 + que.get_id() as f64;
             que.next();

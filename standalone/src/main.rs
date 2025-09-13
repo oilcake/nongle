@@ -7,6 +7,7 @@ use std::error::Error;
 use std::io::Write;
 use std::sync::mpsc;
 
+#[derive(Debug)]
 struct MidiNote {
     pitch: u8,
     velocity: u8,
@@ -39,6 +40,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // this is my audio data
     let notes = Library::new(args.library.as_str());
     let mut state = notes.new_state(args.win_size as usize);
+
+    dbg!(&state);
 
     // this is to make library 'static
     let notes: &'static Library = Box::leak(Box::new(notes));
@@ -129,13 +132,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     while let Ok(midi_note) = note_rx.recv() {
         let _ = std::io::stdout().flush();
 
+        dbg!(&midi_note);
+
         let idx = state.get_layer(midi_note.pitch, midi_note.velocity);
         if idx.is_none() {
             log::debug!("\nNo such note");
             continue;
         }
         if let Some(layer) = notes.get_note(midi_note.pitch, idx.unwrap()) {
-            // add samples to buffer(my one)
+            // add samples to buffer
             let mut samples_lock = buffer_input.lock().unwrap();
             *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.sample());
         }
