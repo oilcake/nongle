@@ -1,13 +1,6 @@
-#![allow(unused_imports)]
-use engine::construct_lib;
-use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::rc::Rc;
-use std::cell::RefCell;
-
-use engine::note;
-use engine::que;
-use engine::sample;
+use engine::Library;
+use std::sync::{Arc, Mutex};
 
 use midir::{Ignore, MidiInput};
 use std::error::Error;
@@ -26,7 +19,7 @@ use clap::Parser;
 /// Command line arguments
 #[derive(Parser, Debug)]
 #[clap(name = "nongle", version = "1.0", author = "oilcake")]
-struct Cli {
+struct Config {
     /// Sample library
     #[clap(short, long, value_parser)]
     library: String,
@@ -40,12 +33,16 @@ struct Cli {
     win_size: u8,
 }
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-    let args = Cli::parse();
+    let args = Config::parse();
     // this is my audio data
-    let mut notes = construct_lib(args.library.as_str(), args.win_size);
+    let notes = Library::new(args.library.as_str());
+    let mut state = notes.new_state(args.win_size as usize);
+
+    // this is to make library 'static
+    let notes: &'static Library = Box::leak(Box::new(notes));
+
     log::debug!("gonna run with {}", &args.voices);
     log::debug!("length of notes {}", &notes.len());
 
@@ -80,10 +77,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             // because I only have one shot type of sound
             if event == NOTE_ON {
                 log::debug!("{}: {:?} (len = {})", stamp, message, message.len());
-                let note = MidiNote {
-                    pitch,
-                    velocity,
-                };
+                let note = MidiNote { pitch, velocity };
                 note_tx.send(note).unwrap();
             }
         },
@@ -102,27 +96,29 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // setup cpal
     let host = cpal::default_host();
-    let device = host.
-        default_output_device().
-        expect("no output device available");
+    let device = host
+        .default_output_device()
+        .expect("no output device available");
     let config = cpal::StreamConfig {
         channels: 1_u16,
         sample_rate: cpal::SampleRate(48000_u32),
         buffer_size: cpal::BufferSize::Default,
     };
-    
+
     let device_name = device.name().unwrap();
     log::debug!("Using device: {device_name} with config: {config:?}");
 
     // Create a cpal stream
-    let stream = device.build_output_stream(
-        &config,
-        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            play_data(data, buffer_output.clone());
-        },
-        move |err| log::error!("an error occurred on stream: {err}"),
-        None,
-    ).unwrap();
+    let stream = device
+        .build_output_stream(
+            &config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                play_data(data, buffer_output.clone());
+            },
+            move |err| log::error!("an error occurred on stream: {err}"),
+            None,
+        )
+        .unwrap();
 
     stream.play().unwrap();
 
@@ -132,17 +128,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: implement the way of breaking a loop
     while let Ok(midi_note) = note_rx.recv() {
         let _ = std::io::stdout().flush();
-        // Now you can clone and use memory_sound multiple times
-        if !notes.contains_key(&midi_note.pitch) {
+
+        let idx = state.get_layer(midi_note.pitch, midi_note.velocity);
+        if idx.is_none() {
             log::debug!("\nNo such note");
             continue;
         }
-        let note = notes.get_mut(&midi_note.pitch);
-        if note.is_some() {
+        if let Some(layer) = notes.get_note(midi_note.pitch, idx.unwrap()) {
             // add samples to buffer(my one)
-            let layer = note.unwrap().get_layer(midi_note.velocity);
             let mut samples_lock = buffer_input.lock().unwrap();
-            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.samples_as_ref());
+            *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.sample());
         }
     }
     Ok(())
