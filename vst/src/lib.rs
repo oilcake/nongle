@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use engine::{sample::Sample, state::State, Library};
 
-const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_small";
+const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_big";
 const DEFAULT_QUE_WIDTH: usize = 4;
 
 /// The number of simultaneous voices for this synth.
@@ -13,11 +13,11 @@ const NUM_VOICES: u32 = 16;
 const MAX_BLOCK_SIZE: usize = 64;
 
 /// A sampler with dynamic velocity layering
-struct Nongle<'a> {
+struct Nongle {
     params: Arc<NongleParams>,
 
     /// The synth's voices. Inactive voices will be set to `None` values.
-    voices: [Option<Voice<'a>>; NUM_VOICES as usize],
+    voices: [Option<Voice>; NUM_VOICES as usize],
     /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
     /// This is incremented by one each time a voice is created.
     next_internal_voice_id: u64,
@@ -33,7 +33,7 @@ struct NongleParams {}
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
 /// struct of arrays instead of having a struct for each voice.
 #[derive(Debug, Clone)]
-struct Voice<'a> {
+struct Voice {
     /// The identifier for this voice. Polyphonic modulation events are linked to a voice based on
     /// these IDs. If the host doesn't provide these IDs, then this is computed through
     /// `compute_fallback_voice_id()`. In that case polyphonic modulation will not work, but the
@@ -50,11 +50,11 @@ struct Voice<'a> {
     velocity_sqrt: f32,
 
     /// Actual samples to use during playback
-    sample: &'a Sample,
+    sample: &'static Sample,
     current_frame: usize,
 }
 
-impl Iterator for Voice<'_> {
+impl Iterator for Voice {
     type Item = f32;
 
     fn next(&mut self) -> Option<f32> {
@@ -68,7 +68,7 @@ impl Iterator for Voice<'_> {
     }
 }
 
-impl Default for Nongle<'static> {
+impl Default for Nongle {
     fn default() -> Self {
         let lib = Library::new(DEFAULT_LIB_PATH);
         let state = lib.new_state(DEFAULT_QUE_WIDTH);
@@ -84,7 +84,7 @@ impl Default for Nongle<'static> {
     }
 }
 
-impl Plugin for Nongle<'static> {
+impl Plugin for Nongle {
     const NAME: &'static str = "Nongle";
     const VENDOR: &'static str = "oilcake tv";
     const URL: &'static str = "";
@@ -147,7 +147,7 @@ impl Plugin for Nongle<'static> {
     }
 }
 
-impl Nongle<'static> {
+impl Nongle {
     /// Handle MIDI events for a single block, process audio for active voices, and terminate finished voices.
     /// Returns the updated block_end value.
     fn handle_event(
@@ -236,7 +236,7 @@ impl Nongle<'static> {
 
     /// Start a new voice with the given voice ID. If all voices are currently in use, the oldest
     /// voice will be stolen. Returns a reference to the new voice.
-    fn start_voice<'a>(
+    fn start_voice(
         &mut self,
         context: &mut impl ProcessContext<Self>,
         sample_offset: u32,
@@ -300,7 +300,7 @@ const fn compute_fallback_voice_id(note: u8, channel: u8) -> i32 {
     note as i32 | ((channel as i32) << 16)
 }
 
-impl ClapPlugin for Nongle<'static> {
+impl ClapPlugin for Nongle {
     const CLAP_ID: &'static str = "com.oilcake.nongle";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("A sampler with dynamic sample layering");
     const CLAP_MANUAL_URL: Option<&'static str> = None;
@@ -314,7 +314,7 @@ impl ClapPlugin for Nongle<'static> {
     const CLAP_POLY_MODULATION_CONFIG: Option<PolyModulationConfig> = None;
 }
 
-impl Vst3Plugin for Nongle<'static> {
+impl Vst3Plugin for Nongle {
     const VST3_CLASS_ID: [u8; 16] = *b"!!!!!Nongle!!!!!";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
         Vst3SubCategory::Instrument,
