@@ -41,12 +41,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let notes = Library::new(args.library.as_str());
     let mut state = notes.new_state(args.win_size as usize);
 
-    dbg!(&state);
-
     // this is to make library 'static
     let notes: &'static Library = Box::leak(Box::new(notes));
 
-    log::debug!("gonna run with {}", &args.voices);
+    // well, currently those voices are nonsense, they are not implemented yet
+    log::debug!("gonna run with {} voices", &args.voices);
     log::debug!("length of notes {}", &notes.len());
 
     // a channel to receive midi notes and pass them to audio engine
@@ -132,14 +131,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     while let Ok(midi_note) = note_rx.recv() {
         let _ = std::io::stdout().flush();
 
-        dbg!(&midi_note);
-
-        let idx = state.get_layer(midi_note.pitch, midi_note.velocity);
+        let idx = state.get_layer(midi_note.pitch.into(), midi_note.velocity.into());
         if idx.is_none() {
             log::debug!("\nNo such note");
             continue;
         }
-        let layer = notes.get_note(midi_note.pitch, idx.unwrap());
+        let layer = notes.get_note(midi_note.pitch.into(), idx.unwrap());
         // add samples to buffer
         let mut samples_lock = buffer_input.lock().unwrap();
         *samples_lock = sum_vectors_with_padding(&samples_lock, &layer.sample());

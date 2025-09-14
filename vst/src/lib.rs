@@ -24,7 +24,7 @@ struct Nongle {
 
     // sample library
     lib: &'static Library,
-    state: State
+    state: State,
 }
 
 #[derive(Default, Params)]
@@ -79,7 +79,7 @@ impl Default for Nongle {
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
             lib: Box::leak(Box::new(lib)),
-            state
+            state,
         }
     }
 }
@@ -175,9 +175,12 @@ impl Nongle {
                             channel,
                             note: pitch,
                             velocity,
-                        } => match self.state.get_layer(pitch, (velocity * 128.0) as u8) {
+                        } => match self
+                            .state
+                            .get_layer_from_normalized_velocity(pitch.into(), velocity)
+                        {
                             Some(idx) => {
-                                let layer = self.lib.get_note(pitch, idx);
+                                let layer = self.lib.get_note(pitch.into(), idx);
                                 let voice = self
                                     .start_voice(context, timing, voice_id, channel, pitch, layer);
                                 voice.velocity_sqrt = velocity.sqrt();
