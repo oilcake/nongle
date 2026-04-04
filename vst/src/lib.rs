@@ -1,7 +1,15 @@
+mod editor;
+
+use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
+use nih_plug_iced::IcedState;
 use std::sync::Arc;
 
-use engine::{sample::Sample, state::State, Library};
+use engine::{
+    sample::Sample,
+    state::{Velocity, VelocityState},
+    SampleLibrary,
+};
 
 const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_big";
 const DEFAULT_QUE_WIDTH: usize = 4;
@@ -23,12 +31,31 @@ struct Nongle {
     next_internal_voice_id: u64,
 
     // sample library
-    lib: &'static Library,
-    state: State,
+    lib: &'static SampleLibrary,
+    state: VelocityState,
+    /// This is stored as voltage gain.
+    peak_meter: Arc<AtomicF32>,
 }
 
-#[derive(Default, Params)]
-struct NongleParams {}
+#[derive(Params)]
+struct NongleParams {
+    /// The editor state, saved together with the parameter state so the custom scaling can be
+    /// restored.
+    #[persist = "editor-state"]
+    editor_state: Arc<IcedState>,
+
+    #[id = "window width"]
+    pub win_width: IntParam,
+}
+
+impl Default for NongleParams {
+    fn default() -> Self {
+        Self {
+            editor_state: editor::default_state(),
+            win_width: IntParam::new("Window Width", 5, IntRange::Linear { min: 1, max: 9 }),
+        }
+    }
+}
 
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
 /// struct of arrays instead of having a struct for each voice.
@@ -70,7 +97,7 @@ impl Iterator for Voice {
 
 impl Default for Nongle {
     fn default() -> Self {
-        let lib = Library::new(DEFAULT_LIB_PATH);
+        let lib = SampleLibrary::new(DEFAULT_LIB_PATH);
         let state = lib.new_state(DEFAULT_QUE_WIDTH);
         Self {
             params: Arc::new(NongleParams::default()),
@@ -80,6 +107,7 @@ impl Default for Nongle {
             next_internal_voice_id: 0,
             lib: Box::leak(Box::new(lib)),
             state,
+            peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
         }
     }
 }
@@ -143,7 +171,18 @@ impl Plugin for Nongle {
             block_end = (block_start + MAX_BLOCK_SIZE).min(num_samples);
         }
 
+        // To save resources, a plugin can (and probably should!) only perform expensive
+        // calculations that are only displayed on the GUI while the GUI is open
+
         ProcessStatus::Normal
+    }
+
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        editor::create(
+            self.params.clone(),
+            self.peak_meter.clone(),
+            self.params.editor_state.clone(),
+        )
     }
 }
 
@@ -177,7 +216,7 @@ impl Nongle {
                             velocity,
                         } => match self
                             .state
-                            .get_layer_from_normalized_velocity(pitch.into(), velocity)
+                            .get_layer(pitch.into(), Velocity::Normalized(velocity))
                         {
                             Some(idx) => {
                                 let layer = self.lib.get_note(pitch.into(), idx);

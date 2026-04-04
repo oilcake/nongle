@@ -8,12 +8,12 @@ use std::array;
 use crate::note::Note;
 use crate::sample::Sample;
 
-pub struct Library([Option<Note>; 128]);
+pub struct SampleLibrary([Option<Note>; 128]);
 
-impl Library {
+impl SampleLibrary {
     pub fn new(path: &str) -> Self {
         let folders = std::fs::read_dir(path).unwrap();
-        let mut notes: Library = Library(array::from_fn(|_| None));
+        let mut notes: SampleLibrary = SampleLibrary(array::from_fn(|_| None));
         for folder in folders {
             let note_path = folder.unwrap().path().to_str().unwrap().to_string();
             let note = note::Note::new_from_folder(note_path.clone());
@@ -39,8 +39,8 @@ impl Library {
         );
     }
 
-    pub fn new_state(&self, default_que_width: usize) -> state::State {
-        let mut state = state::State::default();
+    pub fn new_state(&self, default_que_width: usize) -> state::VelocityState {
+        let mut state = state::VelocityState::default();
         for (pitch, note) in self.0.iter().enumerate() {
             if let Some(note) = note {
                 state.add_note(pitch, note.depth(), default_que_width);

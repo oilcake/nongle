@@ -10,5 +10,8 @@ description = "Nongle - dynamically layered sampler"
 crate-type = ["cdylib"]
 
 [dependencies]
-nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+# nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = [] }
 engine = { path = "../engine" }
+nih_plug_iced = { path = "../nih_plug_iced" }
+atomic_float = "1.1.0"

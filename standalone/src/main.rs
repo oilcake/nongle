@@ -1,5 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use engine::Library;
+use engine::state::Velocity;
+use engine::SampleLibrary;
 use std::sync::{Arc, Mutex};
 
 use midir::{Ignore, MidiInput};
@@ -38,11 +39,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
     let args = Config::parse();
     // this is my audio data
-    let notes = Library::new(args.library.as_str());
+    let notes = SampleLibrary::new(args.library.as_str());
     let mut state = notes.new_state(args.win_size as usize);
 
     // this is to make library 'static
-    let notes: &'static Library = Box::leak(Box::new(notes));
+    let notes: &'static SampleLibrary = Box::leak(Box::new(notes));
 
     // well, currently those voices are nonsense, they are not implemented yet
     log::debug!("gonna run with {} voices", &args.voices);
@@ -131,7 +132,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     while let Ok(midi_note) = note_rx.recv() {
         let _ = std::io::stdout().flush();
 
-        let idx = state.get_layer(midi_note.pitch.into(), midi_note.velocity.into());
+        let idx = state.get_layer(midi_note.pitch.into(), Velocity::Standard(midi_note.velocity as usize));
         if idx.is_none() {
             log::debug!("\nNo such note");
             continue;
