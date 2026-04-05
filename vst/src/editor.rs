@@ -1,4 +1,3 @@
-use atomic_float::AtomicF32;
 use nih_plug::prelude::{Editor, GuiContext};
 use nih_plug_iced::{Alignment, Column, Command, Element, IcedEditor, IcedState, Length, Space, Text, WindowQueue, alignment, assets, create_iced_editor, executor, widgets as nih_widgets};
 // use nih_plug_iced::*;
@@ -13,10 +12,9 @@ pub(crate) fn default_state() -> Arc<IcedState> {
 
 pub(crate) fn create(
     params: Arc<NongleParams>,
-    peak_meter: Arc<AtomicF32>,
     editor_state: Arc<IcedState>,
 ) -> Option<Box<dyn Editor>> {
-    create_iced_editor::<GainEditor>(editor_state, (params, peak_meter))
+    create_iced_editor::<GainEditor>(editor_state, params)
 }
 
 struct GainEditor {
@@ -24,7 +22,6 @@ struct GainEditor {
     context: Arc<dyn GuiContext>,
 
     gain_slider_state: nih_widgets::param_slider::State,
-    peak_meter_state: nih_widgets::peak_meter::State,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -36,10 +33,10 @@ enum Message {
 impl IcedEditor for GainEditor {
     type Executor = executor::Default;
     type Message = Message;
-    type InitializationFlags = (Arc<NongleParams>, Arc<AtomicF32>);
+    type InitializationFlags = Arc<NongleParams>;
 
     fn new(
-        (params, peak_meter): Self::InitializationFlags,
+        params: Self::InitializationFlags,
         context: Arc<dyn GuiContext>,
     ) -> (Self, Command<Self::Message>) {
         let editor = GainEditor {
@@ -48,7 +45,6 @@ impl IcedEditor for GainEditor {
 
 
             gain_slider_state: Default::default(),
-            peak_meter_state: Default::default(),
         };
 
         (editor, Command::none())

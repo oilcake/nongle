@@ -7,19 +7,37 @@ pub enum Velocity {
     Normalized(f32),
 }
 
+pub const DEFAULT_QUE_WIDTH: usize = 4;
+
 #[derive(Debug)]
-// Replace the HashMap with an array (since pitches are 0-127)
-pub struct VelocityState([Option<Que>; 128]);
+// Array of optional queues (since pitches are 0-127)
+pub struct VelocityState {
+    global_width: usize,
+    ques: [Option<Que>; 128],
+}
 
 impl VelocityState {
     pub fn add_note(&mut self, note: usize, layers_number: usize, que_width: usize) {
         let que = Que::new(que_width.min(layers_number), layers_number, QueMode::Up);
-        self.0[note as usize] = Some(que);
+        self.ques[note as usize] = Some(que);
+    }
+
+    pub fn width(&self) -> usize {
+        self.global_width
+    }
+
+    pub fn set_width(&mut self, width: usize) {
+        self.global_width = width;
+        for que in self.ques.iter_mut() {
+            if let Some(que) = que {
+                que.set_width(width);
+            }
+        }
     }
 
     /// Returns layer index
     pub fn get_layer(&mut self, pitch: usize, velocity: Velocity) -> Option<usize> {
-        if let Some(que) = &mut self.0[pitch] {
+        if let Some(que) = &mut self.ques[pitch] {
             match velocity {
                 Velocity::Standard(velocity) => {
                     let depth = que.depth() - que.width();
@@ -42,6 +60,6 @@ impl VelocityState {
 
 impl Default for VelocityState {
     fn default() -> Self {
-        VelocityState([None; 128])
+        VelocityState{global_width: DEFAULT_QUE_WIDTH, ques: [None; 128]}
     }
 }

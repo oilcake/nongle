@@ -1,18 +1,16 @@
 mod editor;
 
-use atomic_float::AtomicF32;
 use nih_plug::prelude::*;
 use nih_plug_iced::IcedState;
 use std::sync::Arc;
 
 use engine::{
     sample::Sample,
-    state::{Velocity, VelocityState},
+    state::{Velocity, VelocityState, DEFAULT_QUE_WIDTH},
     SampleLibrary,
 };
 
 const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_big";
-const DEFAULT_QUE_WIDTH: usize = 4;
 
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
@@ -33,8 +31,6 @@ struct Nongle {
     // sample library
     lib: &'static SampleLibrary,
     state: VelocityState,
-    /// This is stored as voltage gain.
-    peak_meter: Arc<AtomicF32>,
 }
 
 #[derive(Params)]
@@ -52,7 +48,11 @@ impl Default for NongleParams {
     fn default() -> Self {
         Self {
             editor_state: editor::default_state(),
-            win_width: IntParam::new("Window Width", 5, IntRange::Linear { min: 1, max: 9 }),
+            win_width: IntParam::new(
+                "Window Width",
+                DEFAULT_QUE_WIDTH as i32,
+                IntRange::Linear { min: 1, max: 9 },
+            ),
         }
     }
 }
@@ -107,7 +107,6 @@ impl Default for Nongle {
             next_internal_voice_id: 0,
             lib: Box::leak(Box::new(lib)),
             state,
-            peak_meter: Arc::new(AtomicF32::new(util::MINUS_INFINITY_DB)),
         }
     }
 }
@@ -173,6 +172,12 @@ impl Plugin for Nongle {
 
         // To save resources, a plugin can (and probably should!) only perform expensive
         // calculations that are only displayed on the GUI while the GUI is open
+        if self.params.editor_state.is_open() {
+            let width = self.params.win_width.value() as usize;
+            if width != self.state.width() {
+                self.state.set_width(width);
+            }
+        }
 
         ProcessStatus::Normal
     }
@@ -180,7 +185,6 @@ impl Plugin for Nongle {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         editor::create(
             self.params.clone(),
-            self.peak_meter.clone(),
             self.params.editor_state.clone(),
         )
     }

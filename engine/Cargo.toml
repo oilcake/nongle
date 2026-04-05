@@ -15,7 +15,5 @@ name = "engine"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
-regex = "1"
-lazy_static = "1.4.0"
 rodio = "0.18.0"
 log = "0.4.27"

@@ -12,15 +12,17 @@ pub enum QueMode {
 // width is a size of cycle in which we can switch notes
 #[derive(Copy, Clone, Debug)]
 pub struct Que {
+    // index of currtntly active layer
     id: usize,
     // width is a width of moving window
     width: usize,
-    // depth is a number of layers in corrsponding note
+    // depth is a number of layers in corresponding note
     depth: usize,
     mode : QueMode
 }
 
 impl Que {
+    /// If witdth is not passed to constructor, it will be set to default
     pub fn new(width: usize, depth: usize, mode: QueMode) -> Self {
         Que{
             id: 0,
@@ -42,6 +44,9 @@ impl Que {
     }
     pub fn width(&self) -> usize {
         self.width
+    }
+    pub fn set_width(&mut self, width: usize) {
+        self.width = width.min(self.depth);
     }
 }
 
