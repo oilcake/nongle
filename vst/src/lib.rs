@@ -2,7 +2,8 @@ mod editor;
 
 use nih_plug::prelude::*;
 use nih_plug_iced::IcedState;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, RwLock};
 
 use engine::{
     sample::Sample,
@@ -10,13 +11,41 @@ use engine::{
     SampleLibrary,
 };
 
-const DEFAULT_LIB_PATH: &str = "/Users/oilcake/code/nongle/Xy_samples_big";
-
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
 /// The maximum size of an audio block. We'll split up the audio in blocks and render smoothed
 /// values to buffers since these values may need to be reused for multiple voices.
 const MAX_BLOCK_SIZE: usize = 64;
+
+/// Loading progress shared with the editor. `total == 0` means idle.
+struct LoadProgress {
+    done: AtomicUsize,
+    total: AtomicUsize,
+}
+
+impl LoadProgress {
+    fn new() -> Self {
+        Self {
+            done: AtomicUsize::new(0),
+            total: AtomicUsize::new(0),
+        }
+    }
+
+    fn set(&self, done: usize, total: usize) {
+        self.done.store(done, Ordering::Relaxed);
+        self.total.store(total, Ordering::Relaxed);
+    }
+
+    /// Returns `None` when there is nothing to load or loading is done.
+    fn fraction(&self) -> Option<f32> {
+        let total = self.total.load(Ordering::Relaxed);
+        let done = self.done.load(Ordering::Relaxed);
+        if total == 0 || done >= total {
+            return None;
+        }
+        Some(done as f32 / total as f32)
+    }
+}
 
 /// A sampler with dynamic velocity layering
 struct Nongle {
@@ -29,8 +58,10 @@ struct Nongle {
     next_internal_voice_id: u64,
 
     // sample library
-    lib: &'static SampleLibrary,
+    lib: Option<&'static SampleLibrary>,
     state: VelocityState,
+    current_path: String,
+    progress: Arc<LoadProgress>,
 }
 
 #[derive(Params)]
@@ -42,6 +73,10 @@ struct NongleParams {
 
     #[id = "window width"]
     pub win_width: IntParam,
+
+    /// Path to the folder with samples. Empty until the user picks one.
+    #[persist = "sample-library-path"]
+    lib_path: Arc<RwLock<String>>,
 }
 
 impl Default for NongleParams {
@@ -53,6 +88,7 @@ impl Default for NongleParams {
                 DEFAULT_QUE_WIDTH as i32,
                 IntRange::Linear { min: 1, max: 9 },
             ),
+            lib_path: Arc::new(RwLock::new(String::new())),
         }
     }
 }
@@ -97,18 +133,42 @@ impl Iterator for Voice {
 
 impl Default for Nongle {
     fn default() -> Self {
-        let lib = SampleLibrary::new(DEFAULT_LIB_PATH);
-        let state = lib.new_state(DEFAULT_QUE_WIDTH);
+        let params = Arc::new(NongleParams::default());
+        let current_path = params
+            .lib_path
+            .read()
+            .expect("poisoned lib path")
+            .clone();
+        let progress = Arc::new(LoadProgress::new());
+        let lib = load_lib(&current_path, &progress);
+        let state = lib
+            .map(|lib| lib.new_state(params.win_width.value() as usize))
+            .unwrap_or_default();
+
         Self {
-            params: Arc::new(NongleParams::default()),
+            params,
 
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
-            lib: Box::leak(Box::new(lib)),
+            lib,
             state,
+            current_path,
+            progress,
         }
     }
+}
+
+/// Load a sample library from a folder path. Returns `None` for an empty or
+/// missing path so an unconfigured plugin starts silent instead of panicking.
+fn load_lib(path: &str, progress: &LoadProgress) -> Option<&'static SampleLibrary> {
+    if path.is_empty() || !std::path::Path::new(path).is_dir() {
+        return None;
+    }
+    Some(Box::leak(Box::new(SampleLibrary::with_progress(
+        path,
+        |done, total| progress.set(done, total),
+    ))))
 }
 
 impl Plugin for Nongle {
@@ -155,6 +215,8 @@ impl Plugin for Nongle {
         // num_remaining_samples, next_event_idx - block_start_idx)`. Because blocks also need to be
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
+        self.reload_lib();
+
         let num_samples = buffer.samples();
         let _sample_rate = context.transport().sample_rate;
         let output = buffer.as_slice();
@@ -186,11 +248,30 @@ impl Plugin for Nongle {
         editor::create(
             self.params.clone(),
             self.params.editor_state.clone(),
+            self.progress.clone(),
         )
     }
 }
 
 impl Nongle {
+    /// Swap the sample library if the user picked a different folder.
+    fn reload_lib(&mut self) {
+        // ponytail: std RwLock read on the audio thread. Replace with a lock-free
+        // path if hosts report glitches while switching libraries.
+        let path = self.params.lib_path.read().expect("poisoned lib path").clone();
+        if path == self.current_path {
+            return;
+        }
+
+        self.lib = load_lib(&path, &self.progress);
+        self.state = self
+            .lib
+            .map(|lib| lib.new_state(self.params.win_width.value() as usize))
+            .unwrap_or_default();
+        self.voices.fill(None);
+        self.current_path = path;
+    }
+
     /// Handle MIDI events for a single block, process audio for active voices, and terminate finished voices.
     /// Returns the updated block_end value.
     fn handle_event(
@@ -223,10 +304,12 @@ impl Nongle {
                             .get_layer(pitch.into(), Velocity::Normalized(velocity))
                         {
                             Some(idx) => {
-                                let layer = self.lib.get_note(pitch.into(), idx);
-                                let voice = self
-                                    .start_voice(context, timing, voice_id, channel, pitch, layer);
-                                voice.velocity_sqrt = velocity.sqrt();
+                                if let Some(lib) = self.lib {
+                                    let layer = lib.get_note(pitch.into(), idx);
+                                    let voice = self
+                                        .start_voice(context, timing, voice_id, channel, pitch, layer);
+                                    voice.velocity_sqrt = velocity.sqrt();
+                                }
                             }
                             None => (),
                         },

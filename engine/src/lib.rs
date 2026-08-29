@@ -12,9 +12,18 @@ pub struct SampleLibrary([Option<Note>; 128]);
 
 impl SampleLibrary {
     pub fn new(path: &str) -> Self {
-        let folders = std::fs::read_dir(path).unwrap();
+        Self::with_progress(path, |_, _| {})
+    }
+
+    /// Load the library and report `(done, total)` after each note folder.
+    pub fn with_progress<F>(path: &str, mut progress: F) -> Self
+    where
+        F: FnMut(usize, usize),
+    {
+        let folders: Vec<_> = std::fs::read_dir(path).unwrap().collect();
+        let total = folders.len();
         let mut notes: SampleLibrary = SampleLibrary(array::from_fn(|_| None));
-        for folder in folders {
+        for (i, folder) in folders.into_iter().enumerate() {
             let note_path = folder.unwrap().path().to_str().unwrap().to_string();
             let note = note::Note::new_from_folder(note_path.clone());
             let pitch = note_path.clone().split("/").last().unwrap().to_string()[0..2]
@@ -22,6 +31,7 @@ impl SampleLibrary {
                 .parse::<usize>()
                 .unwrap();
             notes.0[pitch] = Some(note);
+            progress(i + 1, total);
         }
         notes
     }

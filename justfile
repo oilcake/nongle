@@ -33,4 +33,4 @@ start_live:
     echo "$PROJECT_PATH"
     "$DAW_PATH" "$PROJECT_PATH"
 
-launch: refresh_debug start_live
+launch: refresh_release start_live

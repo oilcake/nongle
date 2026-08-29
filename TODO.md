@@ -1,0 +1,3 @@
+- [ ] Bake default sample library in binary with `include_bytes!()`
+- [ ] memory lead with the `Box::leak` pattern! In plugin, because its being load as dynamic library
+- [ ] unhardcode paths to sample library and vst plugin bundle
