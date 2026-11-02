@@ -16,21 +16,42 @@ impl SampleLibrary {
     }
 
     /// Load the library and report `(done, total)` after each note folder.
+    /// Falls back to an empty library when the path is not readable. Note
+    /// folders with unparsable names are skipped.
     pub fn with_progress<F>(path: &str, mut progress: F) -> Self
     where
         F: FnMut(usize, usize),
     {
-        let folders: Vec<_> = std::fs::read_dir(path).unwrap().collect();
-        let total = folders.len();
+        let entries = match std::fs::read_dir(path) {
+            Ok(entries) => entries,
+            Err(err) => {
+                log::warn!("can't read sample library {path}: {err}");
+                return SampleLibrary(array::from_fn(|_| None));
+            }
+        };
+
         let mut notes: SampleLibrary = SampleLibrary(array::from_fn(|_| None));
-        for (i, folder) in folders.into_iter().enumerate() {
-            let note_path = folder.unwrap().path().to_str().unwrap().to_string();
-            let note = note::Note::new_from_folder(note_path.clone());
-            let pitch = note_path.clone().split("/").last().unwrap().to_string()[0..2]
-                .to_string()
-                .parse::<usize>()
-                .unwrap();
-            notes.0[pitch] = Some(note);
+        let mut folders: Vec<_> = entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect();
+        folders.sort();
+
+        let total = folders.len();
+        for (i, note_path) in folders.into_iter().enumerate() {
+            // Folder name encodes the pitch in its first two chars, e.g. "60-C".
+            let pitch = note_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.get(0..2))
+                .and_then(|p| p.parse::<usize>().ok());
+            if let Some(pitch) = pitch.filter(|p| *p < 128) {
+                let note = note::Note::new_from_folder(note_path.to_string_lossy().into_owned());
+                if note.depth() > 0 {
+                    notes.0[pitch] = Some(note);
+                }
+            }
             progress(i + 1, total);
         }
         notes

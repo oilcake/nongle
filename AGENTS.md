@@ -10,6 +10,12 @@ Multi-layered xylophone rompler / sampler. Pure Rust, minimal deps.
 - `nih_plug_iced/` — local fork of the iced adapter.
 - `xtask/` — bundling helpers.
 
+## Build
+
+Bundle the plugin with `cargo xtask bundle vst` (or `just build_debug`,
+`just build_release`). Full install-and-relaunch flows live in the `justfile`.
+`cargo build` alone does not produce a loadable plugin bundle.
+
 ## Conventions
 
 - Comments in English only.

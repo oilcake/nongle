@@ -12,10 +12,11 @@ pub struct Sample {
 
 impl Sample {
     pub fn new(path: String) -> Self {
-        // open file
-        let file = std::fs::File::open(&path).unwrap();
         // decode
-        let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+        let source = rodio::Decoder::new(BufReader::new(
+            std::fs::File::open(&path).unwrap(),
+        ))
+        .unwrap();
         let samples: Vec<f32> = source.convert_samples().collect();
         let len = samples.len();
         Self {
@@ -23,6 +24,19 @@ impl Sample {
             sample: samples,
             len,
         }
+    }
+
+    /// `None` when the file can't be opened or decoded.
+    pub fn try_new(path: String) -> Option<Self> {
+        let file = std::fs::File::open(&path).ok()?;
+        let source = rodio::Decoder::new(BufReader::new(file)).ok()?;
+        let samples: Vec<f32> = source.convert_samples().collect();
+        let len = samples.len();
+        Some(Self {
+            filename: path,
+            sample: samples,
+            len,
+        })
     }
     pub fn sample(&self) -> &Vec<f32> {
         &self.sample
